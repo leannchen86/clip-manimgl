@@ -1,0 +1,17 @@
+# Virtual environment
+.venv/
+
+# Rendered videos
+*.mp4
+*.mov
+*.avi
+
+# ManimGL cache
+media/
+videos/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
