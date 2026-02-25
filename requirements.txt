@@ -1,1 +1,6 @@
+# manimgl 1.7.2 from PyPI has a broken import on Python 3.13.
+# Install from the local source repo instead:
+#   pip install /path/to/manimgl
+#
+# Or if on Python <=3.12:
 manimgl==1.7.2
