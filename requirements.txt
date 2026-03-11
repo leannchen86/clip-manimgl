@@ -1,6 +1,12 @@
-# manimgl 1.7.2 from PyPI has a broken import on Python 3.13.
-# Install from the local source repo instead:
+# ManimGL currently imports pkg_resources (deprecated). On Python 3.13,
+# newer setuptools builds may not include pkg_resources, so pin to <81.
+setuptools<81
+
+# ManimGL's embed/autoreload currently expects IPython with `.magic()`
+# (removed in IPython 9+), so pin to <9.
+ipython<9
+
+# manimgl 1.7.2 from PyPI has a broken import on some setups.
+# Install from the local source repo instead if needed:
 #   pip install /path/to/manimgl
-#
-# Or if on Python <=3.12:
 manimgl==1.7.2

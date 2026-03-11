@@ -5,6 +5,8 @@ import random
 class CLIPSharedEmbeddingSpace(Scene):
     def construct(self):
         self.camera.background_color = BLACK
+        # Use a TeX-like font via Pango (no LaTeX install needed)
+        manim_config.text.font = "CMU Serif"
 
         # -----------------------------
         # Style helpers
@@ -18,19 +20,19 @@ class CLIPSharedEmbeddingSpace(Scene):
                 r.set_stroke(GREY_B, width=1.3)
                 r.shift(UP * (0.03 * i) + RIGHT * (0.03 * i))
                 stack.add(r)
-            label = Tex(r"\text{" + title + r"}", font_size=24, color=GREY_A)
+            label = Text(title, font_size=24, color=GREY_A)
             label.move_to(stack.get_center())
             box = VGroup(stack, label)
             return box
 
         def make_token_block(word, color, font_size=30):
-            t = Tex(r"\text{" + word + r"}", font_size=font_size, color=color)
+            t = Text(word, font_size=font_size, color=color)
             box = SurroundingRectangle(t, buff=0.12, color=color)
             box.set_stroke(width=1.6)
             box.set_fill(color, opacity=0.15)
             return VGroup(box, t)
 
-        def make_number_vector(n=6, width=1.5, buff=0.12, offset=0):
+        def make_number_vector(n=6, buff=0.12, offset=0, pad=0.18):
             # Vertical vector: numbers in a column with bracket-like top/bottom (single math entity)
             # offset 用來讓兩邊向量數字不同（e.g. text 用 0，image 用非 0）
             nums = VGroup()
@@ -38,11 +40,11 @@ class CLIPSharedEmbeddingSpace(Scene):
                 val = (i * 17 + offset * 13) % 100 / 100.0
                 if i % 2 == 1:
                     val = -val
-                num = Tex(f"{val:.2f}", font_size=22, color=WHITE)
+                num = Text(f"{val:.2f}", font_size=22, color=WHITE)
                 nums.add(num)
             nums.arrange(DOWN, buff=buff)
             nums.move_to(ORIGIN)
-            w = max(width, nums.get_width() + 0.25)
+            w = nums.get_width() + pad
             tick = 0.08
             top_y = nums.get_top()[1] + 0.08
             bot_y = nums.get_bottom()[1] - 0.08
@@ -106,17 +108,18 @@ class CLIPSharedEmbeddingSpace(Scene):
         right_track_x =  6.0
 
         # Titles for text / image paths
-        left_title = Tex(r"\text{Text path}", font_size=40, color=GREY_B)
-        right_title = Tex(r"\text{Image path}", font_size=40, color=GREY_B)
+        left_title = Text("Text path", font_size=40, color=GREY_B)
+        right_title = Text("Image path", font_size=40, color=GREY_B)
         left_title.move_to(np.array([left_track_x + 1.8, 3.6, 0]))
         right_title.move_to(np.array([right_track_x - 1.8, 3.6, 0]))
-        self.play(FadeIn(left_title), FadeIn(right_title), run_time=0.5)
 
         # -----------------------------
         # Left: sentence -> tokens -> Text Encoder -> text embedding
         # -----------------------------
-        sentence = Tex(r"\text{a photo of a dog}", font_size=42, color=GREEN_C)
+        sentence = Text("a photo of a dog", font_size=42, color=GREEN_C)
         sentence.move_to(np.array([left_track_x + 1.8, 2.7, 0]))
+        self.play(FadeIn(left_title), run_time=1)
+        self.play(FadeOut(left_title), run_time=0.5)
         self.play(Write(sentence), run_time=0.9)
 
         words = ["a", "photo", "of", "a", "dog"]
@@ -130,7 +133,7 @@ class CLIPSharedEmbeddingSpace(Scene):
         self.wait(0.2)
 
         # Move tokens downward along the left track
-        tokens_target = tokens.copy().arrange(DOWN, buff=0.14).move_to(np.array([left_track_x + 1.8, 1.2, 0]))
+        tokens_target = tokens.copy().move_to(np.array([left_track_x + 1.8, 1.2, 0]))
         self.play(Transform(tokens, tokens_target), run_time=0.9)
 
         # Text encoder box
@@ -139,17 +142,14 @@ class CLIPSharedEmbeddingSpace(Scene):
         self.play(FadeIn(text_encoder, shift=UP*0.2), run_time=0.6)
 
         # Tokens pass through encoder (shrink into box center)
-        into_box = tokens.copy()
-        for i, m in enumerate(into_box):
-            m.scale(0.55)
-            m.move_to(text_encoder.get_center() + UP*(0.25 - 0.12*i))
+        into_box = tokens.copy().scale(0.55).move_to(text_encoder.get_center())
         self.play(Transform(tokens, into_box), run_time=0.8)
         self.play(FadeOut(tokens), run_time=0.25)
 
         # Emerge as text embedding vector（[可調] n=維度列數，這裡用 6 列）
-        text_vec = make_number_vector(n=6, width=1.5, buff=0.12, offset=0)
+        text_vec = make_number_vector(n=6, buff=0.12, offset=0)
         text_vec.move_to(np.array([left_track_x + 1.8, -2.3, 0]))
-        text_vec_lbl = Tex(r"\text{Text embedding}", font_size=22, color=GREY_A)
+        text_vec_lbl = Text("Text embedding", font_size=22, color=GREY_A)
         text_vec_lbl.next_to(text_vec, DOWN, buff=0.2)
 
         self.play(FadeIn(text_vec, shift=DOWN*0.2), run_time=0.8)
@@ -158,13 +158,15 @@ class CLIPSharedEmbeddingSpace(Scene):
         # -----------------------------
         # Right: real dog image -> patch grid -> Image Encoder -> image embedding
         # -----------------------------
-        # 使用實際狗狗圖片檔：dog_photo.jpg（需與此 py 在同一層）
-        dog_img = ImageMobject("dog_photo.jpg")
+        # 使用實際狗狗圖片檔
+        self.play(FadeIn(right_title), run_time=1)
+        self.play(FadeOut(right_title), run_time=0.5)
+        dog_img = ImageMobject("example_photos/dog_photo.jpg")
         dog_img.set_height(2.0)  # [可調] 圖片高度
         dog_img.move_to(np.array([right_track_x - 1.8, 1.8, 0]))  # [可調] 位置
 
         # 圖片上方的說明文字
-        img_cap = Tex(r"\text{(image)}", font_size=22, color=GREY_A)
+        img_cap = Text("(image)", font_size=22, color=GREY_A)
         img_cap.next_to(dog_img, UP, buff=0.1)
 
         # 動畫：圖片與說明淡入
@@ -190,7 +192,7 @@ class CLIPSharedEmbeddingSpace(Scene):
             grid_lines.add(Line([x, top_y, 0], [x, bot_y, 0], stroke_color=WHITE, stroke_width=1.6))
 
         # 「Split into patches」標籤
-        split_lbl = Tex(r"\text{Split into patches}", font_size=22, color=GREY_A)
+        split_lbl = Text("Split into patches", font_size=22, color=GREY_A)
         split_lbl.next_to(dog_img, DOWN, buff=0.25)
 
         # 動畫：網格線畫出 + 標籤出現；之後標籤淡出
@@ -239,9 +241,9 @@ class CLIPSharedEmbeddingSpace(Scene):
         self.play(FadeOut(flying_patches), run_time=0.6)
 
         # Image embedding vector（[可調] 同樣改成 6 列）
-        img_vec = make_number_vector(n=6, width=1.5, buff=0.12, offset=31)
+        img_vec = make_number_vector(n=6, buff=0.12, offset=31)
         img_vec.move_to(np.array([right_track_x - 1.8, -2.3, 0]))
-        img_vec_lbl = Tex(r"\text{Image embedding}", font_size=22, color=GREY_A)
+        img_vec_lbl = Text("Image embedding", font_size=22, color=GREY_A)
         img_vec_lbl.next_to(img_vec, DOWN, buff=0.2)
 
         self.play(FadeIn(img_vec, shift=DOWN*0.2), run_time=0.8)
@@ -267,7 +269,7 @@ class CLIPSharedEmbeddingSpace(Scene):
         plane.scale(0.8)
         plane.move_to(ORIGIN)
 
-        space_lbl = Tex(r"\text{Shared 2D embedding space}", font_size=26, color=BLUE_B)
+        space_lbl = Text("Shared 2D embedding space", font_size=26, color=BLUE_B)
         space_lbl.next_to(plane, UP, buff=0.25)
 
         # Bring in the plane
@@ -288,29 +290,28 @@ class CLIPSharedEmbeddingSpace(Scene):
         text_point = make_glow_dot(color=GREEN_C, r=0.08).move_to(plane.c2p(-0.7, 0.5))
         img_point  = make_glow_dot(color=YELLOW_C, r=0.08).move_to(plane.c2p(-0.35, 0.25))
 
-        proj_lbl = Tex(r"\text{project}", font_size=20, color=GREY_B)
+        proj_lbl = Text("project", font_size=20, color=GREY_B)
         proj_lbl.move_to(np.array([0, -0.9, 0]))
 
-        self.play(FadeIn(proj_lbl), run_time=0.3)
         self.play(
             ReplacementTransform(text_vec, text_point),
             ReplacementTransform(img_vec, img_point),
             run_time=0.9
         )
-        self.play(FadeOut(proj_lbl), run_time=0.3)
 
         # Cosine similarity dotted line
         sim_line = DashedLine(text_point.get_center(), img_point.get_center(), dash_length=0.12)
         sim_line.set_stroke(WHITE, 2.2, opacity=0.9)
-        sim_lbl = Tex(r"\text{cosine similarity}", font_size=22, color=GREY_A)
+        sim_lbl = Text("cosine similarity", font_size=22, color=GREY_A)
         sim_lbl.next_to(sim_line.get_center(), UP, buff=0.15)
 
         self.play(ShowCreation(sim_line), FadeIn(sim_lbl), run_time=0.7)
+        self.play(FadeOut(sim_lbl), run_time=0.3)
         self.wait(0.6)
 
         # Fade out surrounding (titles + encoders), zoom in on shared embedding space
         surrounding = VGroup(left_title, right_title, text_encoder, img_encoder)
-        center_group = VGroup(plane, space_lbl, text_point, img_point, sim_line, sim_lbl)
+        center_group = VGroup(plane, space_lbl, text_point, img_point, sim_line)
         self.play(
             FadeOut(surrounding),
             center_group.animate.scale(1.55).move_to(ORIGIN),
@@ -322,9 +323,9 @@ class CLIPSharedEmbeddingSpace(Scene):
         # Ending: shared clusters in embedding space — 狗 / 貓 / 車子
         # -----------------------------
         clusters = [
-            {"center": (-1.5,  1.0), "n": 4, "c1": GREEN_C,  "c2": YELLOW_C, "label": r"\text{dog}"},
-            {"center": ( 1.4,  0.9), "n": 4, "c1": TEAL_C,   "c2": BLUE_C,   "label": r"\text{cat}"},
-            {"center": ( 0.0, -1.1), "n": 4, "c1": PURPLE_C, "c2": RED_C,   "label": r"\text{car}"},
+            {"center": (-1.5,  1.0), "n": 4, "c1": GREEN_C,  "c2": YELLOW_C, "label": "dog"},
+            {"center": ( 1.4,  0.9), "n": 4, "c1": TEAL_C,   "c2": BLUE_C,   "label": "cat"},
+            {"center": ( 0.0, -1.1), "n": 4, "c1": PURPLE_C, "c2": RED_C,   "label": "car"},
         ]
 
         new_pairs = VGroup()
@@ -347,11 +348,11 @@ class CLIPSharedEmbeddingSpace(Scene):
                 new_pairs.add(p_text, p_img)
                 new_lines.add(line)
             # 每個 cluster 的標籤（狗 / 貓 / 車子）
-            lbl = Tex(cl["label"], font_size=24, color=cl["c1"])
+            lbl = Text(cl["label"], font_size=24, color=cl["c1"])
             lbl.next_to(plane.c2p(cx, cy), UP, buff=0.35)
             cluster_labels.add(lbl)
 
-        end_lbl = Tex(r"\text{Similar text--image pairs cluster by meaning}", font_size=26, color=GREY_A)
+        end_lbl = Text("Similar text-image pairs cluster by meaning", font_size=26, color=GREY_A)
         end_lbl.next_to(plane, DOWN, buff=0.25)
 
         self.play(
