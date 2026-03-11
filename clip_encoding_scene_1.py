@@ -1,6 +1,7 @@
 from manimlib import *
 import numpy as np
 import random
+import os
 
 class CLIPSharedEmbeddingSpace(Scene):
     def construct(self):
