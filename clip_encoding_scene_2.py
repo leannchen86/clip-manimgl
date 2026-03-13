@@ -39,8 +39,8 @@ def create_matrix_cells(N, grid_anchor, step, cell_size, scale_factor):
 def logit_color(is_diag, value):
     """Warm for high logits (matched), cool/dark blue for low (mismatched)."""
     if is_diag:
-        return YELLOW_C  # matched pair → push high
-    return BLUE_E  # mismatched → push low
+        return YELLOW_C
+    return BLUE_E
 
 
 def populate_raw_logits(cells, logits_matrix, N, scale_factor):
@@ -80,12 +80,26 @@ class CLIPSimilarityMatrix(Scene):
         layout_shift_up = 1
 
         # [可調] 向量 [n,m,k] 的位置與大小
-        vec_font_size = 10 * scale_factor      # 向量字體大小（數字越大向量越大）
-        vec_buff_above_thumb = 0.3 * scale_factor   # 圖片向量在圖片上方的間距
-        vec_buff_left_prompt = 0.3 * scale_factor  # 文字向量在文字左方的間距
-        vec_spread_at_bottom = 0.35 * scale_factor  # 內積時兩向量在格子下方的左右間距
-        vec_below_cell_offset = 0.15 * scale_factor  # 下方相乘處與格子的垂直距離（越大離格子越遠）
-        # 表格下方一排的 y（與 L_CLIP、subtitle、Normalization 同高）
+        vec_font_size_final = 10 * scale_factor      # 最終停在圖片上方/文字左方時的字體大小
+        vec_font_size_center = 18 * scale_factor     # 一開始在畫面中央出現時的較大字體
+        vec_buff_above_thumb = 0.3 * scale_factor
+        vec_buff_left_prompt = 0.3 * scale_factor
+        vec_spread_at_bottom = 0.35 * scale_factor
+        vec_below_cell_offset = 0.15 * scale_factor
+
+        # 中間出場時的排版
+        img_center_x = 0
+        img_center_y = 1.2 * scale_factor
+        img_center_gap = 0.75 * scale_factor
+
+        # text_vec 先在畫面中間偏右，之後只做「水平位移」到左邊 prompt
+        txt_start_x = 0 * scale_factor
+
+        # 中間大字縮到最終小字的比例
+        img_scale_ratio = vec_font_size_final / vec_font_size_center
+        txt_scale_ratio = vec_font_size_final / vec_font_size_center
+
+        # 表格下方一排的 y
         bottom_row_y = -N * step - 0 * scale_factor
 
         grid_anchor = np.array([
@@ -94,7 +108,7 @@ class CLIPSimilarityMatrix(Scene):
             0
         ])
 
-        # ----------  Axes: thumbnails (row), text prompts (column)  ----------
+        # ---------- Axes: thumbnails (row), text prompts (column) ----------
         thumb_files = ["dog_w.jpg", "cat_w.jpg", "car_w.jpg"]
         text_prompts = [r"\text{dog}", r"\text{cat}", r"\text{car}"]
 
@@ -118,48 +132,107 @@ class CLIPSimilarityMatrix(Scene):
         )
         self.wait(0.3)
 
-        # ----------  固定向量：每張圖片一個、每段文字一個  ----------
+        # ---------- 固定向量：每張圖片一個、每段文字一個 ----------
         def vec_str(a, b, c):
             return r"[" + f"{a:.1f}, {b:.1f}, {c:.1f}" + r"]"
 
-        # 圖片 embedding（狗、貓、車）固定數值
         img_vecs = [
-            (0.9, 0.4, -0.2),   # image 0 dog
-            (0.3, 0.85, 0.15),  # image 1 cat
-            (-0.4, 0.2, 0.9),   # image 2 car
+            (0.9, 0.4, -0.2),
+            (0.3, 0.85, 0.15),
+            (-0.4, 0.2, 0.9),
         ]
-        # 文字 embedding（狗、貓、車）固定數值
+
         txt_vecs = [
-            (0.95, 0.2, 0.0),   # text 0 dog
-            (0.35, 0.9, 0.25),  # text 1 cat
-            (-0.35, 0.1, 0.85), # text 2 car
+            (0.95, 0.2, 0.0),
+            (0.35, 0.9, 0.25),
+            (-0.35, 0.1, 0.85),
         ]
-        # 內積得到 logits（縮放後對角線約 4.x、非對角線較小）
+
         def dot(u, v):
             return sum(a * b for a, b in zip(u, v))
+
         logits_matrix = [[dot(img_vecs[i], txt_vecs[j]) * 4.5 for j in range(N)] for i in range(N)]
 
         cells, row_centers = create_matrix_cells(N, grid_anchor, step, cell_size, scale_factor)
         populate_raw_logits(cells, logits_matrix, N, scale_factor)
 
-        # 在對應圖片上方、文字左方顯示固定向量
+        # ---------- img_vec / txt_vec 先出現在中間，再移到原本位置 ----------
         img_vec_mobs = []
         txt_vec_mobs = []
-        fs = int(vec_font_size)
+        fs_final = int(vec_font_size_final)
+        fs_center = int(vec_font_size_center)
+
+        # 最終目標位置
+        img_targets = []
+        txt_targets = []
+
         for i in range(N):
-            v = Tex(vec_str(*img_vecs[i]), font_size=fs, color=YELLOW_C)
             thumb_center = grid_anchor + np.array([i * step, step * 0.8, 0])
-            v.next_to(thumb_center, UP, buff=vec_buff_above_thumb)
-            img_vec_mobs.append(v)
+            dummy = Tex(vec_str(*img_vecs[i]), font_size=fs_final, color=YELLOW_C)
+            dummy.next_to(thumb_center, UP, buff=vec_buff_above_thumb)
+            img_targets.append(dummy.get_center())
+
         for j in range(N):
-            v = Tex(vec_str(*txt_vecs[j]), font_size=fs, color=TEAL_C)
             prompt_center = grid_anchor + np.array([-step * 0.9, -j * step, 0])
-            v.next_to(prompt_center, LEFT, buff=vec_buff_left_prompt)
-            txt_vec_mobs.append(v)
+            dummy = Tex(vec_str(*txt_vecs[j]), font_size=fs_final, color=TEAL_C)
+            dummy.next_to(prompt_center, LEFT, buff=vec_buff_left_prompt)
+            txt_targets.append(dummy.get_center())
+
+        # 1) img_vec 先在畫面中間垂直排列，以較大字體出現
+        for i in range(N):
+            v = Tex(vec_str(*img_vecs[i]), font_size=fs_center, color=YELLOW_C)
+            v.move_to(np.array([
+                img_center_x,
+                img_center_y - i * img_center_gap,
+                0
+            ]))
+            img_vec_mobs.append(v)
+
         self.play(
-            LaggedStart(*[FadeIn(v) for v in img_vec_mobs], lag_ratio=0.08),
-            LaggedStart(*[FadeIn(v) for v in txt_vec_mobs], lag_ratio=0.08),
-            run_time=0.6
+            LaggedStart(*[FadeIn(v, scale=1.15) for v in img_vec_mobs], lag_ratio=0.12),
+            run_time=0.7
+        )
+        self.wait(0.2)
+
+        # 2) img_vec 從中間垂直排列移到上方水平排列，同時變小
+        self.play(
+            LaggedStart(
+                *[
+                    img_vec_mobs[i].animate.move_to(img_targets[i]).scale(img_scale_ratio)
+                    for i in range(N)
+                ],
+                lag_ratio=0.12
+            ),
+            run_time=1.0
+        )
+        self.wait(0.2)
+
+        # 3) text_vec 再出現在畫面中間，以較大字體出現；y 直接對齊最終位置
+        for j in range(N):
+            v = Tex(vec_str(*txt_vecs[j]), font_size=fs_center, color=TEAL_C)
+            v.move_to(np.array([
+                txt_start_x,
+                txt_targets[j][1],
+                0
+            ]))
+            txt_vec_mobs.append(v)
+
+        self.play(
+            LaggedStart(*[FadeIn(v, scale=1.15) for v in txt_vec_mobs], lag_ratio=0.12),
+            run_time=0.7
+        )
+        self.wait(0.2)
+
+        # 4) text_vec 水平位移到 prompt 左邊，同時變小
+        self.play(
+            LaggedStart(
+                *[
+                    txt_vec_mobs[j].animate.move_to(txt_targets[j]).scale(txt_scale_ratio)
+                    for j in range(N)
+                ],
+                lag_ratio=0.12
+            ),
+            run_time=1.0
         )
         self.wait(0.2)
 
@@ -173,14 +246,12 @@ class CLIPSimilarityMatrix(Scene):
                 center = cell[0].get_center()
                 below_center = center + DOWN * below_offset
 
-                # 複製：圖片向量 i、文字向量 j，起點在對應圖上／文左
-                copy_img = Tex(vec_str(*img_vecs[i]), font_size=fs, color=YELLOW_C)
-                copy_txt = Tex(vec_str(*txt_vecs[j]), font_size=fs, color=TEAL_C)
+                copy_img = Tex(vec_str(*img_vecs[i]), font_size=fs_final, color=YELLOW_C)
+                copy_txt = Tex(vec_str(*txt_vecs[j]), font_size=fs_final, color=TEAL_C)
                 copy_img.move_to(img_vec_mobs[i].get_center())
                 copy_txt.move_to(txt_vec_mobs[j].get_center())
                 self.add(copy_img, copy_txt)
 
-                # 兩向量位移到該格下方（左右並排）
                 dot_sym = Tex(r"\cdot", font_size=int(22 * scale_factor), color=GREY_A)
                 target_left = below_center + LEFT * vec_spread_at_bottom
                 target_right = below_center + RIGHT * vec_spread_at_bottom
@@ -191,7 +262,7 @@ class CLIPSimilarityMatrix(Scene):
                 )
                 dot_sym.move_to(below_center)
                 self.play(FadeIn(dot_sym), run_time=0.12)
-                # 內積結果出現，再移進格子
+
                 val = logits_matrix[i][j]
                 s = f"{val:.1f}" if isinstance(val, (int, float)) else str(val)
                 result_num = Tex(s, font_size=int(22 * scale_factor), color=WHITE)
@@ -204,7 +275,7 @@ class CLIPSimilarityMatrix(Scene):
                 self.play(result_num.animate.move_to(center), run_time=0.35)
                 self.remove(result_num)
                 self.add(cell[1])
-        # 相乘完成後，上方／左方的固定向量淡出
+
         self.play(
             FadeOut(img_vec_mobs[0]), FadeOut(img_vec_mobs[1]), FadeOut(img_vec_mobs[2]),
             FadeOut(txt_vec_mobs[0]), FadeOut(txt_vec_mobs[1]), FadeOut(txt_vec_mobs[2]),
@@ -212,7 +283,6 @@ class CLIPSimilarityMatrix(Scene):
         )
         self.wait(0.2)
 
-        # Subtitle: Diagonal = matched → HIGH; Off-diagonal = mismatched → LOW（與 L_CLIP 同高）
         line1 = Tex(r"\text{Diagonal = matched pairs} \rightarrow \text{ push similarity HIGH}", font_size=22, color=GREY_A)
         line2 = Tex(r"\text{Off-diagonal = mismatched} \rightarrow \text{ push similarity LOW}", font_size=22, color=GREY_A)
         subtitle = VGroup(line1, line2).arrange(DOWN, buff=0.12)
@@ -220,8 +290,6 @@ class CLIPSimilarityMatrix(Scene):
         self.play(FadeIn(subtitle, shift=UP * 0.1), run_time=0.6)
         self.wait(0.4)
 
-        # ----------  Stage 2: Row-wise softmax  ----------
-        # 兩行字幕 fadeout 後等約 1 秒，再 fadein Normalization
         self.play(FadeOut(subtitle), run_time=0.5)
         self.wait(1)
         norm_lbl = Tex(r"\text{Normalization}", font_size=28, color=YELLOW_C)
@@ -229,26 +297,23 @@ class CLIPSimilarityMatrix(Scene):
         self.play(FadeIn(norm_lbl), run_time=0.5)
         self.wait(0.2)
 
-        # Bar chart 顯示在圖表右方（與該列對齊）
-        bar_chart_offset_right = 0.9 * scale_factor  # 矩陣右緣到 bar chart 的距離
+        bar_chart_offset_right = 0.9 * scale_factor
 
         for row_idx in range(N):
             logits_row = logits_matrix[row_idx]
             probs_row = softmax_row(logits_row)
-            # 位置：矩陣右側，與當前列同高
+
             bar_center = grid_anchor + np.array([
                 (N - 1) * step + bar_chart_offset_right,
                 -row_idx * step,
                 0
             ])
 
-            # Bars: first show raw logits (shifted for visibility), then normalize to probs
             bars = VGroup()
             max_l = max(logits_row)
             min_l = min(logits_row)
             span = max_l - min_l if max_l != min_l else 1
             for k in range(N):
-                # Height proportional to logit (shifted to be positive for display)
                 h_raw = 0.15 + 0.4 * (logits_row[k] - min_l) / span
                 bar = Rectangle(
                     width=0.18 * scale_factor,
@@ -258,12 +323,13 @@ class CLIPSimilarityMatrix(Scene):
                     stroke_width=0.5 * scale_factor,
                 )
                 bars.add(bar)
+
             bars.arrange(RIGHT, buff=0.05 * scale_factor)
             bars.move_to(bar_center)
 
             self.play(FadeIn(bars), run_time=0.25)
             self.wait(0.1)
-            # Normalize: bars become probabilities (heights sum to 1 visually)
+
             for k, bar in enumerate(bars):
                 new_h = (0.2 + 0.5 * probs_row[k]) * scale_factor
                 bar.stretch(new_h / bar.get_height(), 1)
@@ -272,7 +338,6 @@ class CLIPSimilarityMatrix(Scene):
             self.play(bars.animate.stretch(0.9, 1), run_time=0.4)
             self.play(FadeOut(bars), run_time=0.15)
 
-            # Snap back: update cell numbers to probabilities
             for j in range(N):
                 idx = row_idx * N + j
                 p_val = probs_row[j]
@@ -283,28 +348,23 @@ class CLIPSimilarityMatrix(Scene):
                 self.remove(cells[idx][1])
                 self.add(new_num)
             self.wait(0.1)
+
         self.wait(0.2)
-        # Normalization 文字在 L_image 出現前淡出
+
         self.play(FadeOut(norm_lbl), run_time=0.4)
         self.wait(0.15)
 
-        # ----------  Loss: L_image → 留下移表下偏左；L_text → 留下移表下偏右；合併後 FadeOut 兩者、FadeIn L_CLIP  ----------
-        # [可調] 箭頭與標籤位置
         row_arrow_below = -0.1 * scale_factor
         row_arrow_left = 0.3 * scale_factor
         row_arrow_right = 0.3 * scale_factor
         col_arrow_right = 0.5 * scale_factor
         col_arrow_above = 0.35 * scale_factor
         col_arrow_below = -0.5 * scale_factor
-        # [可調] 移下來後的三個文字位置（與 subtitle / Normalization 同高 = bottom_row_y）
+
         below_y = bottom_row_y
-        below_left_x = (N - 1) * step / 2 - 1.1 * scale_factor   # L_image 移下來後的 x（越小越左）
-        below_right_x = (N - 1) * step / 2 + 1.1 * scale_factor   # L_text 移下來後的 x（越大越右）
-        # merge_center = 表格水平中線 + below_y，L_CLIP 也出現在此
+        below_left_x = (N - 1) * step / 2 - 1.1 * scale_factor
+        below_right_x = (N - 1) * step / 2 + 1.1 * scale_factor
 
-        grid_center = grid_anchor + np.array([(N - 1) * step / 2, -(N - 1) * step / 2, 0])
-
-        # L_image：橫箭頭掃過 → 箭頭淡出，標籤留下並移到表下方偏左
         row_arrow_y = -N * step - row_arrow_below
         arrow_row = Arrow(
             grid_anchor + np.array([-row_arrow_left, row_arrow_y, 0]),
@@ -322,7 +382,6 @@ class CLIPSimilarityMatrix(Scene):
         self.play(L_img_label.animate.move_to(target_L_img), run_time=0.5)
         self.wait(0.15)
 
-        # L_text：直箭頭掃過 → 箭頭淡出，標籤留下並移到表下方偏右
         col_arrow_x = (N - 1) * step + col_arrow_right
         arrow_col = Arrow(
             grid_anchor + np.array([col_arrow_x, col_arrow_above, 0]),
@@ -340,7 +399,6 @@ class CLIPSimilarityMatrix(Scene):
         self.play(L_txt_label.animate.move_to(target_L_txt), run_time=0.5)
         self.wait(0.2)
 
-        # 兩標籤合併到中央 → FadeOut 兩者、FadeIn L_CLIP
         merge_center = grid_anchor + np.array([(N - 1) * step / 2, below_y, 0])
         self.play(
             L_img_label.animate.move_to(merge_center),
@@ -348,8 +406,9 @@ class CLIPSimilarityMatrix(Scene):
             run_time=0.6
         )
         self.wait(0.2)
+
         L_clip_label = Tex(r"\mathcal{L}_{\text{CLIP}}", font_size=int(32 * scale_factor), color=YELLOW_C)
-        L_clip_label.move_to(merge_center)  # 在 L_image 與 L_text 合體處出現
+        L_clip_label.move_to(merge_center)
         self.play(
             FadeOut(L_img_label),
             FadeOut(L_txt_label),
