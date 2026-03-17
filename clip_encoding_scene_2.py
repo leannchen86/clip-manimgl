@@ -283,60 +283,66 @@ class CLIPSimilarityMatrix(Scene):
         )
         self.wait(0.2)
 
-        line1 = Tex(r"\text{Diagonal = matched pairs} \rightarrow \text{ push similarity HIGH}", font_size=22, color=GREY_A)
-        line2 = Tex(r"\text{Off-diagonal = mismatched} \rightarrow \text{ push similarity LOW}", font_size=22, color=GREY_A)
-        subtitle = VGroup(line1, line2).arrange(DOWN, buff=0.12)
-        subtitle.move_to(grid_anchor + np.array([(N - 1) * step / 2, bottom_row_y, 0]))
-        self.play(FadeIn(subtitle, shift=UP * 0.1), run_time=0.6)
-        self.wait(0.4)
+        # 強調 diagonal（三個對角線）與 off-diagonal（其餘六格）
+        diag_cells = [cells[i * N + i] for i in range(N)]
+        off_cells = [cells[i * N + j] for i in range(N) for j in range(N) if i != j]
 
-        self.play(FadeOut(subtitle), run_time=0.5)
-        self.wait(1)
+        # 1) 先讓 off-diagonal 暗一點，凸顯對角線
+        self.play(
+            *[
+                c[0].animate.set_fill(c[0].get_fill_color(), opacity=0.08)
+                for c in off_cells
+            ],
+            run_time=0.4
+        )
+        # 2) 對角線三格「彈一下」
+        self.play(
+            *[c.animate.scale(1.08) for c in diag_cells],
+            run_time=0.25
+        )
+        self.play(
+            *[c.animate.scale(1 / 1.08) for c in diag_cells],
+            run_time=0.2
+        )
+        self.wait(0.25)
+
+        # 3) 還原 off-diagonal 亮度，並讓 diagonal 暗一點
+        self.play(
+            *[
+                c[0].animate.set_fill(c[0].get_fill_color(), opacity=0.3)
+                for c in off_cells
+            ],
+            *[
+                c[0].animate.set_fill(c[0].get_fill_color(), opacity=0.12)
+                for c in diag_cells
+            ],
+            run_time=0.45
+        )
+        # 4) 讓 off-diagonal 的六格「彈一下」
+        self.play(
+            *[c.animate.scale(1.08) for c in off_cells],
+            run_time=0.3
+        )
+        self.play(
+            *[c.animate.scale(1 / 1.08) for c in off_cells],
+            run_time=0.2
+        )
+        self.wait(0.4)
+        self.play(
+            *[
+                c[0].animate.set_fill(c[0].get_fill_color(), opacity=0.5)
+                for c in diag_cells
+            ],
+            run_time=0.4
+        )
         norm_lbl = Tex(r"\text{Normalization}", font_size=28, color=YELLOW_C)
         norm_lbl.move_to(grid_anchor + np.array([(N - 1) * step / 2, bottom_row_y, 0]))
         self.play(FadeIn(norm_lbl), run_time=0.5)
         self.wait(0.2)
 
-        bar_chart_offset_right = 0.9 * scale_factor
-
         for row_idx in range(N):
             logits_row = logits_matrix[row_idx]
             probs_row = softmax_row(logits_row)
-
-            bar_center = grid_anchor + np.array([
-                (N - 1) * step + bar_chart_offset_right,
-                -row_idx * step,
-                0
-            ])
-
-            bars = VGroup()
-            max_l = max(logits_row)
-            min_l = min(logits_row)
-            span = max_l - min_l if max_l != min_l else 1
-            for k in range(N):
-                h_raw = 0.15 + 0.4 * (logits_row[k] - min_l) / span
-                bar = Rectangle(
-                    width=0.18 * scale_factor,
-                    height=h_raw * scale_factor,
-                    fill_color=YELLOW_C,
-                    fill_opacity=0.8,
-                    stroke_width=0.5 * scale_factor,
-                )
-                bars.add(bar)
-
-            bars.arrange(RIGHT, buff=0.05 * scale_factor)
-            bars.move_to(bar_center)
-
-            self.play(FadeIn(bars), run_time=0.25)
-            self.wait(0.1)
-
-            for k, bar in enumerate(bars):
-                new_h = (0.2 + 0.5 * probs_row[k]) * scale_factor
-                bar.stretch(new_h / bar.get_height(), 1)
-            bars.arrange(RIGHT, buff=0.05 * scale_factor)
-            bars.move_to(bar_center)
-            self.play(bars.animate.stretch(0.9, 1), run_time=0.4)
-            self.play(FadeOut(bars), run_time=0.15)
 
             for j in range(N):
                 idx = row_idx * N + j
@@ -349,72 +355,4 @@ class CLIPSimilarityMatrix(Scene):
                 self.add(new_num)
             self.wait(0.1)
 
-        self.wait(0.2)
-
-        self.play(FadeOut(norm_lbl), run_time=0.4)
-        self.wait(0.15)
-
-        row_arrow_below = -0.1 * scale_factor
-        row_arrow_left = 0.3 * scale_factor
-        row_arrow_right = 0.3 * scale_factor
-        col_arrow_right = 0.5 * scale_factor
-        col_arrow_above = 0.35 * scale_factor
-        col_arrow_below = -0.5 * scale_factor
-
-        below_y = bottom_row_y
-        below_left_x = (N - 1) * step / 2 - 1.1 * scale_factor
-        below_right_x = (N - 1) * step / 2 + 1.1 * scale_factor
-
-        row_arrow_y = -N * step - row_arrow_below
-        arrow_row = Arrow(
-            grid_anchor + np.array([-row_arrow_left, row_arrow_y, 0]),
-            grid_anchor + np.array([(N - 1) * step + row_arrow_right, row_arrow_y, 0]),
-            buff=0.08 * scale_factor,
-            stroke_width=4 * scale_factor,
-            stroke_color=MAROON_B,
-        )
-        L_img_label = Tex(r"\mathcal{L}_{\text{image}}", font_size=int(28 * scale_factor), color=MAROON_B)
-        L_img_label.next_to(arrow_row, DOWN, buff=0.12 * scale_factor)
-        self.play(ShowCreation(arrow_row), FadeIn(L_img_label), run_time=0.7)
-        self.wait(0.2)
-        self.play(FadeOut(arrow_row), run_time=0.25)
-        target_L_img = grid_anchor + np.array([below_left_x, below_y, 0])
-        self.play(L_img_label.animate.move_to(target_L_img), run_time=0.5)
-        self.wait(0.15)
-
-        col_arrow_x = (N - 1) * step + col_arrow_right
-        arrow_col = Arrow(
-            grid_anchor + np.array([col_arrow_x, col_arrow_above, 0]),
-            grid_anchor + np.array([col_arrow_x, -N * step - col_arrow_below, 0]),
-            buff=0.08 * scale_factor,
-            stroke_width=4 * scale_factor,
-            stroke_color=TEAL_B,
-        )
-        L_txt_label = Tex(r"\mathcal{L}_{\text{text}}", font_size=int(28 * scale_factor), color=TEAL_B)
-        L_txt_label.next_to(arrow_col, RIGHT, buff=0.12 * scale_factor)
-        self.play(ShowCreation(arrow_col), FadeIn(L_txt_label), run_time=0.7)
-        self.wait(0.2)
-        self.play(FadeOut(arrow_col), run_time=0.25)
-        target_L_txt = grid_anchor + np.array([below_right_x, below_y, 0])
-        self.play(L_txt_label.animate.move_to(target_L_txt), run_time=0.5)
-        self.wait(0.2)
-
-        merge_center = grid_anchor + np.array([(N - 1) * step / 2, below_y, 0])
-        self.play(
-            L_img_label.animate.move_to(merge_center),
-            L_txt_label.animate.move_to(merge_center),
-            run_time=0.6
-        )
-        self.wait(0.2)
-
-        L_clip_label = Tex(r"\mathcal{L}_{\text{CLIP}}", font_size=int(32 * scale_factor), color=YELLOW_C)
-        L_clip_label.move_to(merge_center)
-        self.play(
-            FadeOut(L_img_label),
-            FadeOut(L_txt_label),
-            FadeIn(L_clip_label, scale=1.2),
-            run_time=0.7
-        )
-        self.wait(1.2)
-
-        self.embed()
+        self.wait(0.8)
