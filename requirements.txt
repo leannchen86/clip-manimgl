@@ -10,3 +10,7 @@ ipython<9
 # Install from the local source repo instead if needed:
 #   pip install /path/to/manimgl
 manimgl==1.7.2
+
+# Python 3.13 removed stdlib audioop; pydub expects it.
+# This backfill package restores compatibility.
+audioop-lts; python_version >= "3.13"

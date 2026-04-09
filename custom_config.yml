@@ -1,0 +1,9 @@
+directories:
+  base: ""
+  subdirs:
+    output: "videos"
+    raster_images: "example_photos"
+    vector_images: "vector_images"
+    sounds: "sounds"
+    data: "data"
+    downloads: "downloads"
