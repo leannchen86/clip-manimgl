@@ -1,0 +1,63 @@
+What is my white name?
+Outline:
+Recordings of demos at meetups/ppl’s reactions
+question/hypothesise: can we train a model that can distinguish people’s faces and their names?
+Foreshadowing what would be learned: (tbd), showing animations too
+Hypothesis/test: how good are zero-shot CLIP/VLM for this task?
+Before we do the tests, what are they, how do they work and why do we expect these architectures to perform this type of task? * and show that even if CLIP is not the newest compared to Dino V3 or siglip, turns out that OG CLIP still outperforms the rest after testing on all of them.*
+Explain CLIP and VLM architecture + how do they work (including the type of output they return)   Scene1, Scene 2
+(Maybe not necessary) trying on various llms to see the outputs? gemini/qwen3.5 refused to answer. Claude gave some interesting guesses, but they are random each time.
+trying on zero-shot CLIP: shows the guesses are random too (probability-wise, 2% across 50 names mostly, given the range of 50 names)
+Also shows that newer models such siglip, dino v3, arcface have been tried, but they didn’t beat the original model in terms of performance - accuracy.
+Going back to the question/hypothesis: can we train a model that can distinguish people’s faces and their names, with data?
+as shown previously, the plain/vanilla CLIP shows us the predictions/classifications mostly randomly guessed
+
+
+Let’s first train a 2-way classifier with 2 random names. 
+Start with an easy one David vs. Mary. CLIP can reach ~99% accuracy, but here’s the issue: is CLIP really learning about face-name associations, or did it find some shortcut and become reliant on that? So we mixed the David dataset with some daniel and william data (the amount of data? the names kept), and it turns out that CLIP undoubtedly labeled every of the noises as David, and proved that CLIP is relying solely on gender signals. It classified any male images to David, which proves that CLIP wasn’t learning face-name association at all. Instead, it was cheating through gender signal shortcuts. 
+So now a new experiment is to remove the gender factor and see if CLIP can capture something else other than the gender signal. Let’s do David vs. Thomas, which are both male names. Interestingly, it seems that there are signals between David versus Thomas where it exceeds the baseline (random guess 50%), meaning that there’s signals even though it’s weak. [add more statistical tests to more strict and rigorous analysis like mmd, silhouette scores] (this is the test based on 100 images per name, frozen CLIP + mlp classifier)
+
+This is the test based on [50k training data and 5k val dataset]. To see if more data can (significantly) increase per-name accuracy, we did a learning/scaling curve test. It’s interesting to see that even at 5 images, CLIP is already picking up signals and accuracy jumps 2~3%. The accuracy rate, however, started to plateau around 500 images, but stabilized at around 7.5k images. [e.g. convergence test]
+
+However, there are also names that the model struggles to correctly identify or easily confuse with other names such as robert, where the model just gradually learns to never predict them. 
+
+See the confusion matrix that shows the top pairs of names that the model confuses with. that there are certain name pairs that the model struggles to distinguish between like matt vs. ryan.
+
+So what is going on there?
+
+(TBD)
+
+
+
+This table shows that, even with some fluctuating accuracy variance, the signals between the same-gendered names are consistent across seeds, both Daniel and Thomas images exceed the 50% random-guess baselines.
+Now let’s add a female name-image pair dataset into the classification test, and see what we got. Unsurprisingly, annas got almost 100% accuracy as it’s not difficult for CLIP to pick up gender signals at all after seeing 400M+ image/text pairs of data. *for some of you who may ask why we didn’t get 100% accuracy for annas, the after-investigated answer is that there were noises in the data where people didn’t use their real faces for their profile pictures, so CLIP was highly likely right to flag the annas who put their children in their profile pictures as non-annas.
+
+
+Previously we did the learning curve test to see how the accuracy rate grows and when it would plateau. Convergence test told us that things stabilized around 7.5 data points for each class/name. For the small-scale experiments with 3 names here, it’s interesting to see
+
+
+
+Speaking of accuracy, all names accuracy or per name accuracy don’t have significant differences.
+Softmax introduces the zero-sum budget effect?
+
+
+
+Hypothesis 1: clip vs. fine-tune vision language models such as qwen2.5 vl 3b/7b -> hooks for staying to check out which architecture we end up using
+Explaining clip (highlight that why it’s still relevant), and how it beats newer versions such as siglip, openclip, metaclip in terms of performance for this project
+
+
+
+
+
+
+
+
+
+general clip mechanism animations (learned classification on text/image pairs)
+
+
+Explaining the architecture of vision language model and how it’s different from clip
+Interesting findings:
+The name images do show real signals (small -> big experiments)  
+Confusion matrix of certain pairs of names get confused/predicted more frequently than other combinations (e.g. laura -> sarah, william -> thomas, whereas william rarely get predicted as chris)... (tbd)
+

@@ -1,0 +1,117 @@
+Scene 1: CLIP Encoders & Shared Embedding Space
+The scene opens with two parallel pipelines, left for text and right for image. On the text side, show a short phrase like “a photo of a dog” or “David” rendered as text. Animate the phrase being broken into token blocks, which pass into a stylized transformer-like “Text Encoder” box built from stacked layers. On the image side, show a clean image thumbnail. Overlay a patch grid, then animate those patches feeding into a matching “Image Encoder” box. Each encoder emits a vertical embedding vector with glowing numeric components or feature bars. Both embeddings then move inward and get projected into a shared 2D embedding plane in the center. The two corresponding points land near each other and glow. A dotted line appears between them with the label “high cosine similarity.” End by populating the space with several image-text pairs forming loose semantic neighborhoods. Avoid making clusters too clean or too perfect.
+
+Scene 2: Contrastive Learning & the NxN Similarity Matrix
+The scene starts with N image thumbnails arranged in a row at the top of the screen, and N corresponding text prompts arranged in a column on the left — forming the axes of a grid. Animate each cell of the grid filling in as a dot product is "computed" — represented by two vectors briefly appearing, multiplying, and collapsing into a scalar value that populates the cell. Diagonal cells light up in a warm color (high similarity, correct pairs), while off-diagonal cells cool to dark blue (low similarity, incorrect pairs). Add a subtitle: "Diagonal = matched pairs → push similarity HIGH. Off-diagonal = mismatched → push similarity LOW." Then overlay a softmax normalization step: each row of the matrix briefly flashes as a bar chart, normalizes, and snaps back into the matrix. Show two loss arrows: one labeled L_image sweeping across rows, another labeled L_text sweeping down columns, then averaging into a single L_CLIP label at the center.
+Scene 3: L2 Normalization & Cosine Similarity on a Hypersphere
+Start in 2D with a raw embedding vector from the origin whose tip lies outside the unit circle. Animate the vector shrinking or stretching onto the unit circle while keeping its angle fixed. Label the formula briefly: normalized vector equals original vector divided by its norm. Then transition into a 3D sphere or a strong 2.5D illusion of a sphere, with several normalized embeddings shown as glowing points on the surface. Highlight two points and draw their angle from the center, labeling theta. Then show cosine similarity as depending only on that angle. Animate two points moving closer in direction and then farther apart. Keep one line of plain-language text: “After normalization, direction matters more than raw magnitude.”
+Scene 4: UMAP Projecting High-Dimensional Embeddings to 2D
+Begin with a chaotic cloud labeled “High-dimensional embedding space,” without overcommitting to a literal “768 dimensions” if that makes the scene too awkward. If you do mention dimensionality, frame it as an example rather than the entire point. Show a local neighborhood around one point, with edges to nearby neighbors, to establish that UMAP starts from neighborhood relationships. Then animate the cloud being projected into a 2D scatter plot. The final 2D plot should show partial structure: some local neighborhoods remain coherent, some groups are somewhat separated, but the global layout should not look perfectly faithful or mathematically exact. Use a label like: “UMAP preserves local neighborhoods and can reveal broader structure.” Do not say it “preserves global structure” without qualification.
+
+Scene 5:
+Create two overlapping 2D point clouds:
+blue points labeled David
+orange points labeled Thomas
+The two clouds should overlap heavily, with only a slight shift in center.
+
+Animation:
+show the two clouds appearing one after another
+add a top caption:
+Are these two distributions measurably different?
+select 3 blue sample points and 3 orange sample points
+draw faint radial kernel circles around each selected point
+show pairwise similarity lines:
+blue-to-blue
+orange-to-orange
+blue-to-orange
+
+Then compress the visual into three summary bars:
+within David
+within Thomas
+across names
+
+Then morph those bars into one scalar label:
+MMD > 0
+
+Add a bottom caption:
+Small but measurable distribution difference.
+Do not make the two clouds look cleanly separated. The whole point is that they overlap a lot.
+
+Scene 6: Silhouette score with weak separation
+Use the same two-class scatter plot as Scene 7 so the visual continuity is obvious.
+
+Animation steps:
+
+highlight one blue point
+draw lines from it to several nearby blue points
+label the average of those distances as a = within-class distance
+draw lines from the same point to the nearest orange neighborhood
+label that average as b = nearest other-class distance
+
+Then show the silhouette formula in small text:
+s = (b - a) / max(a, b)
+
+Immediately after, place a number line from -1 to +1.
+Animate a marker landing slightly above zero, around 0.08 or 0.12.
+
+Bottom caption:
+Weak separation, not clean clustering
+
+Do not end with neatly separated clusters.
+
+Scene 6:
+Softmax probability budget and crowded-out names
+
+Create a bar chart with 6 names:
+
+William
+Jessica
+Sarah
+Thomas
+Laura
+Robert
+
+At time step 1:
+
+all bars are moderate and sum to 100%
+
+Then animate a training progression over 4 steps:
+
+William, Jessica, and Sarah bars rise
+Robert bar steadily shrinks
+total always remains normalized
+
+Show a softmax label at the top:
+Probabilities must sum to 1
+
+Then add a bottom caption:
+As the model gets more confident about some names, harder names can get crowded out
+
+Final frame:
+
+Robert bar is very small
+other bars dominate
+
+Avoid wording like “the model learns not to predict Robert.”
+Use “Robert gets crowded out.”
+
+
+Scene 5: MLP Decision Boundaries
+Start with a 2D scatter plot of two interleaved classes (red and blue points). A single straight line tries to separate them but fails — label it "linear classifier: insufficient." Fade in a small MLP diagram on the side: input layer → hidden layers (with ReLU activation illustrated as a bent line graph) → output layer. As each layer processes the data, animate the feature space warping — the points rearrange via a smooth transformation at each layer, until in the final latent space they become linearly separable. A clean decision boundary line appears in this transformed space, then maps back to the original space as a curved, non-linear boundary weaving between the classes. End by annotating each region with the predicted class label, and show the boundary sharpen as training epochs tick up (animate a counter from epoch 0 to 100).
+Scene 6: Convergence Test
+Open with an animated line chart. X-axis: number of training images per name. Y-axis: accuracy. Start at 0 — the line sits at the random baseline (dotted horizontal line at 50% for 2-way, or ~2% for 50-way). As the count ticks up (5, 10, 50, 100, 500, 1000, 5000, 7500), the accuracy line climbs in a classic log-curve shape — steep early gains, then flattening. Annotate three moments: at 5 images ("signal appears"), at 500 ("gains slow"), at 7,500 ("plateau"). End by drawing the asymptote and labeling it "signal ceiling."
+Scene 7: MMD (Maximum Mean Discrepancy)
+Show two overlapping point clouds in 2D — one red (David embeddings), one blue (Thomas embeddings). They overlap heavily. Label: "Are these distributions actually different?" Animate the MMD computation: sample points from each cloud, draw arrows between them representing pairwise kernel distances, then collapse all distances into a single scalar. Show a number line from 0 to 1 — our value lands somewhere small but statistically significant. Flash a p-value. "Small but real. The distributions are different."
+Scene 8: Silhouette Score
+Start with the same two point clouds. Pick a single point and highlight it. Draw two measurements: (a) average distance to its own cluster, labeled "cohesion," and (b) average distance to the nearest other cluster, labeled "separation." The silhouette score is (b − a) / max(a, b). Animate a bar from −1 (wrong cluster) to +1 (perfectly separated). Our score lands close to 0 but slightly positive — "weak but real clustering."
+Scene 9: Ablation — Frozen CLIP + MLP vs. Fine-Tuned CLIP
+Split screen. Left side: CLIP encoder shown as a locked/frozen block (padlock icon), with only the small MLP head highlighted as trainable. Right side: the same CLIP encoder but unfrozen — the whole stack glows, all weights updating. Show training animations on both sides. Below each, an accuracy counter ticks up. Compare final numbers.
+Scene 10: VLM Architecture Comparison
+Show CLIP's architecture on the left — two separate encoders, similarity score output. On the right, show a VLM like Qwen2.5-VL: image encoder feeds into a language model that generates text autoregressively. Highlight the key difference: CLIP compares, VLMs generate. Animate a face image going through both pipelines — CLIP outputs a similarity ranking over names, the VLM outputs a sentence like "This person looks like a David."
+Scene 11: t-SNE vs. UMAP Comparison
+Show the same high-dimensional point cloud. Split screen: left runs t-SNE, right runs UMAP. Both produce 2D scatter plots, but with visible differences. t-SNE side: local clusters are tight but global positions are arbitrary — label "preserves local structure, global layout is random." UMAP side: clusters are similar locally but relative positions are meaningful — label "preserves both local and global structure." Circle a pair of clusters that are far apart in UMAP but adjacent in t-SNE to make the point concrete.
+Scene 12: Softmax Zero-Sum Budget
+Show a bar chart of predicted probabilities across 10 names, all summing to 100%. Animate what happens when the model gets more confident about one name — that bar grows, all others shrink. Then show a "hard" name like Robert: the model can't predict it reliably, so its probability mass gets redistributed to confident names. Robert's bar shrinks toward zero across training epochs. "The model doesn't just fail to learn Robert — it actively learns to not predict Robert."
+Scene 13: Gender Shortcut Reveal
+Show a 2D feature space with David points on one side and Mary points on the other — clean separation, 99% accuracy line drawn between them. Now drop in Daniel and William points. They all land on the David side. The separation line relabelles from "David / Mary" to "Male / Female." Zoom out: the axis was gender all along.
+

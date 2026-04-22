@@ -1,7 +1,6 @@
 from manimlib import *
 import numpy as np
 import random
-import os
 
 class CLIPSharedEmbeddingSpace(Scene):
     def construct(self):
@@ -365,4 +364,3 @@ class CLIPSharedEmbeddingSpace(Scene):
         self.play(FadeIn(end_lbl), run_time=0.5)
 
         self.wait(2)
-        self.embed()
