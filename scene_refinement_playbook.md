@@ -482,6 +482,32 @@ What to reuse next time:
 What to avoid next time:
 ```
 
+## Lesson: Show the aggregation step when a metric compresses many distances into one scalar
+
+Date: 2026-04-22
+
+Scene/file: `silhouette_weak_separation_scene.py`
+
+What changed:
+
+The scene stopped treating the blue and orange connectors as self-explanatory bundles. Instead, it now transforms copies of those exact displayed distances into small summary bars and labels their means as `a` and `b` before landing the silhouette score on the number line.
+
+Why it worked:
+
+Without the aggregation step, viewers can understand that two kinds of distances are being compared but still fail to understand what the symbols mean. Showing the set of measurements, then the averaging step, then the scalar makes the metric feel causal instead of decorative.
+
+What to reuse next time:
+
+For scenes that collapse many local measurements into one statistic, preserve this chain on screen:
+- measured examples
+- grouped summary of those same examples
+- aggregation label such as mean / sum / max
+- final scalar payoff
+
+What to avoid next time:
+
+Do not jump directly from several colored connectors to symbolic variables if the viewer still has to infer how those measurements became the scalar.
+
 ### Current starter lessons
 
 #### Lesson: Use layout verifiers for annotation-heavy scenes
