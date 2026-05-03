@@ -390,6 +390,297 @@ class RetinaFacePreprocessScene(Scene):
         label.next_to(entries, DOWN, buff=0.18)
         return VGroup(entries, label)
 
+    def token_color(self, index):
+        palette = [
+            "#2F80ED",
+            "#27AE60",
+            "#F2C94C",
+            "#EB5757",
+            "#56CCF2",
+            "#BB6BD9",
+            "#F2994A",
+            "#6FCF97",
+        ]
+        return palette[index % len(palette)]
+
+    def make_token_cell(self, index=0, side=0.24, fill_opacity=1.0):
+        cell = Square(side_length=side)
+        cell.set_fill(self.token_color(index), opacity=fill_opacity)
+        cell.set_stroke(WHITE, width=0.75, opacity=0.82)
+        return cell
+
+    def make_transformer_token_row(self, left_count=18, right_count=10, side=0.24):
+        row = VGroup()
+        cells = VGroup()
+        ellipsis = Tex(r"\cdots", font_size=28, color=GREY_A)
+
+        token_index = 0
+        for _ in range(left_count):
+            cell = self.make_token_cell(token_index, side=side)
+            row.add(cell)
+            cells.add(cell)
+            token_index += 1
+
+        row.add(ellipsis)
+
+        for _ in range(right_count):
+            cell = self.make_token_cell(token_index, side=side)
+            row.add(cell)
+            cells.add(cell)
+            token_index += 1
+
+        row.arrange(RIGHT, buff=0.055)
+        return row, cells, ellipsis
+
+    def make_token_row_stack(self, token_row, layers=3):
+        stack = VGroup()
+        stack_palette = [
+            "#00D1FF",
+            "#FF6B35",
+            "#9B5DE5",
+            "#00F5A0",
+            "#FF477E",
+            "#FEE440",
+            "#5A86FF",
+            "#B8F35A",
+        ]
+        for depth in range(1, layers + 1):
+            row_copy = token_row.copy()
+            row_copy.shift(UP * 0.34 * depth)
+            row_copy.set_opacity(0.48 - 0.11 * depth)
+            row_copy.set_z_index(1)
+            visible_index = 0
+            for mob in row_copy:
+                if isinstance(mob, Square):
+                    color_index = (visible_index * 5 + depth * 3) % len(stack_palette)
+                    mob.set_fill(stack_palette[color_index], opacity=0.48 - 0.11 * depth)
+                    mob.set_stroke(WHITE, width=0.7, opacity=0.48 - 0.11 * depth)
+                    visible_index += 1
+            stack.add(row_copy)
+        return stack
+
+    def make_attention_connections(self, token_cells, count=38, seed=7):
+        rng = np.random.default_rng(seed)
+        connections = VGroup()
+        colors = [BLUE_B, TEAL_B, YELLOW_B, GREEN_B]
+        total = len(token_cells)
+        pairs = set()
+
+        while len(pairs) < count:
+            left = int(rng.integers(0, total - 3))
+            max_span = min(15, total - left - 1)
+            span = int(rng.integers(3, max_span + 1))
+            right = left + span
+            pairs.add((left, right))
+
+        for index, (left, right) in enumerate(sorted(pairs)):
+            start = token_cells[left].get_top() + UP * 0.025
+            end = token_cells[right].get_top() + UP * 0.025
+            span = abs(right - left)
+            arc_height = 0.22 + 0.055 * span + 0.09 * (index % 4)
+            jitter = RIGHT * float(rng.uniform(-0.08, 0.08))
+            mid = (start + end) / 2 + UP * arc_height + jitter
+
+            curve = VMobject()
+            curve.set_points_smoothly([start, mid, end])
+            curve.set_stroke(colors[index % len(colors)], width=1.2, opacity=0.42)
+            connections.add(curve)
+
+        return connections
+
+    def make_layernorm_stats(self, token_cells):
+        mean_values = [
+            "-0.18", "0.07", "-0.04", "0.13", "-0.09", "0.02", "0.16",
+            "-0.11", "0.05", "-0.14", "0.09", "-0.02", "0.12", "-0.06",
+            "0.01", "-0.10", "0.15", "-0.03", "0.08", "-0.12", "0.04",
+            "0.11", "-0.07", "0.03", "-0.15", "0.06", "-0.01", "0.10",
+        ]
+        std_values = [
+            "1.18", "0.91", "1.04", "0.87", "1.12", "0.96", "1.23",
+            "0.89", "1.07", "0.94", "1.15", "0.98", "1.20", "0.92",
+            "1.01", "0.88", "1.17", "0.95", "1.09", "0.90", "1.13",
+            "0.97", "1.06", "0.93", "1.21", "0.99", "1.10", "0.86",
+        ]
+
+        mean_numbers = VGroup()
+        std_numbers = VGroup()
+        for index, cell in enumerate(token_cells):
+            mean = Tex(mean_values[index], font_size=9, color=GREY_A)
+            mean.next_to(cell, UP, buff=0.075)
+            mean_numbers.add(mean)
+
+            std = Tex(std_values[index], font_size=9, color=GREY_A)
+            std.next_to(cell, DOWN, buff=0.075)
+            std_numbers.add(std)
+
+        mean_label = TexText("mean", font_size=14, color=GREY_B)
+        mean_label.next_to(mean_numbers[0], LEFT, buff=0.16)
+        std_label = TexText("std", font_size=14, color=GREY_B)
+        std_label.next_to(std_numbers[0], LEFT, buff=0.16)
+
+        return VGroup(mean_label, std_label, mean_numbers, std_numbers)
+
+    def make_mlp_vector(self, output=False):
+        prefix = r"\tilde{n}" if output else "n"
+        vector = Tex(
+            r"\left[\begin{array}{c}"
+            + rf"{prefix}_1\\ {prefix}_2\\ \vdots\\ {prefix}_{{1024}}"
+            + r"\end{array}\right]",
+            font_size=28,
+            color=WHITE if not output else YELLOW_B,
+        )
+        return vector
+
+    def make_feed_forward_mlp(self):
+        layer_sizes = [4, 6, 4]
+        layer_colors = [GREEN_B, BLUE_B, YELLOW_B]
+
+        node_layers = VGroup()
+        for layer_index, size in enumerate(layer_sizes):
+            nodes = VGroup()
+            for _ in range(size):
+                node = Circle(radius=0.07)
+                node.set_fill(layer_colors[layer_index], opacity=0.12)
+                node.set_stroke(layer_colors[layer_index], width=1.25, opacity=0.88)
+                nodes.add(node)
+            nodes.arrange(DOWN, buff=0.12)
+            node_layers.add(nodes)
+        node_layers.arrange(RIGHT, buff=0.46)
+
+        connections = VGroup()
+        for left_layer, right_layer in zip(node_layers[:-1], node_layers[1:]):
+            for left_node in left_layer:
+                for right_node in right_layer:
+                    line = Line(left_node.get_center(), right_node.get_center())
+                    line.set_stroke(GREY_B, width=0.55, opacity=0.28)
+                    connections.add(line)
+
+        label = TexText("MLP", font_size=18, color=WHITE)
+        label.next_to(node_layers, UP, buff=0.13)
+
+        return VGroup(connections, node_layers, label)
+
+    def make_transformer_block(self, width=3.35, height=0.36, color=BLUE_B, opacity=0.92):
+        box = RoundedRectangle(
+            width=width,
+            height=height,
+            corner_radius=0.06,
+            stroke_color=color,
+            stroke_width=1.1,
+            fill_color="#111820",
+            fill_opacity=opacity,
+        )
+        label = TexText("Transformer", font_size=16, color=WHITE)
+        label.move_to(box)
+        return VGroup(box, label)
+
+    def make_transformer_depth_stack(self):
+        blocks = VGroup()
+        colors = [BLUE_B, TEAL_B, GREEN_B, YELLOW_B]
+        for index in range(4):
+            block = self.make_transformer_block(
+                color=colors[index % len(colors)],
+                opacity=0.88,
+            )
+            blocks.add(block)
+        lower_blocks = blocks.copy()
+
+        upper_blocks = VGroup()
+        for index in range(4):
+            block = self.make_transformer_block(
+                color=colors[(index + 1) % len(colors)],
+                opacity=0.88,
+            )
+            upper_blocks.add(block)
+
+        lower_blocks.arrange(UP, buff=0)
+        upper_blocks.arrange(UP, buff=0)
+        dots = Tex(r"\vdots", font_size=34, color=GREY_A)
+
+        stack = VGroup(lower_blocks, dots, upper_blocks)
+        stack.arrange(UP, buff=0.11)
+
+        multiplier = Tex(r"\times 24", font_size=38, color=YELLOW_B)
+        multiplier.next_to(stack, RIGHT, buff=0.5)
+
+        return VGroup(stack, multiplier)
+
+    def make_position_token_labels(self, token_cells):
+        position_labels = VGroup()
+        token_type_labels = VGroup()
+        total_visible = len(token_cells)
+        for index, cell in enumerate(token_cells):
+            if index < total_visible - 4:
+                position = index
+            else:
+                position = 576 - (total_visible - 1 - index)
+
+            top_label = Tex(str(position), font_size=13, color=GREY_A)
+            top_label.next_to(cell, UP, buff=0.09)
+            position_labels.add(top_label)
+
+            if position == 0:
+                bottom_label = Tex(r"\mathrm{[CLS]}", font_size=16, color=YELLOW_B)
+            else:
+                bottom_label = Tex(str(position), font_size=13, color=GREY_A)
+            bottom_label.next_to(cell, DOWN, buff=0.09)
+            token_type_labels.add(bottom_label)
+
+        pos_label = TexText("pos", font_size=17, color=GREY_B)
+        pos_label.next_to(position_labels[0], LEFT, buff=0.22)
+        patch_label = TexText("patch", font_size=17, color=GREY_B)
+        patch_label.next_to(token_type_labels[0], LEFT, buff=0.22)
+
+        return VGroup(pos_label, patch_label, position_labels, token_type_labels)
+
+    def make_cls_embedding_vector(self):
+        return Tex(
+            r"\left[n_1,\ n_2,\ \ldots,\ n_{768}\right]",
+            font_size=42,
+            color=YELLOW_B,
+        )
+
+    def make_embedding_space(self):
+        axes = ThreeDAxes(
+            x_range=(-1.2, 1.2, 10),
+            y_range=(-1.2, 1.2, 10),
+            z_range=(-1.2, 1.2, 10),
+            width=1.9,
+            height=1.9,
+            depth=1.9,
+        )
+        axes.x_axis.set_stroke(BLUE_B, width=1.2, opacity=0.72)
+        axes.y_axis.set_stroke(TEAL_B, width=1.2, opacity=0.72)
+        axes.z_axis.set_stroke(YELLOW_B, width=1.2, opacity=0.72)
+
+        sphere = Sphere(radius=1)
+        sphere.set_color(BLUE_D)
+        sphere.set_opacity(0.1)
+
+        x_label = Tex("x", font_size=18, color=BLUE_B)
+        x_label.move_to(RIGHT * 1.15 + DOWN * 0.06)
+        y_label = Tex("y", font_size=18, color=TEAL_B)
+        y_label.move_to(UP * 1.15 + RIGHT * 0.06)
+        z_label = Tex("z", font_size=18, color=YELLOW_B)
+        z_label.move_to(LEFT * 0.20 + UP * 0.20)
+
+        space = Group(axes, sphere, x_label, y_label, z_label)
+        space.rotate(45 * DEGREES, axis=OUT, about_point=ORIGIN)
+        space.rotate(-45 * DEGREES, axis=RIGHT, about_point=ORIGIN)
+
+        return space
+
+    def make_embedding_vector(self, end, color=YELLOW_B):
+        vector = Line(ORIGIN, end, color=color, stroke_width=3.0)
+        vector.set_opacity(1.0)
+        endpoint = Sphere(radius=0.055)
+        endpoint.set_color(color)
+        endpoint.move_to(end)
+        embedding_vector = Group(vector, endpoint)
+        embedding_vector.rotate(45 * DEGREES, axis=OUT, about_point=ORIGIN)
+        embedding_vector.rotate(-45 * DEGREES, axis=RIGHT, about_point=ORIGIN)
+        return embedding_vector
+
     def make_patch_vector(self):
         card = RoundedRectangle(
             width=4.25,
@@ -811,3 +1102,531 @@ class RetinaFacePreprocessScene(Scene):
             run_time=1.45,
         )
         self.wait(1.4)
+
+        # PART 4 -- Transformer input tokens and self-attention
+        token_seed = self.make_token_cell(index=3, side=0.36, fill_opacity=0.95)
+        token_seed.move_to(patch_value_vector[0].get_center())
+
+        token_row, token_cells, token_ellipsis = self.make_transformer_token_row()
+        token_row.move_to(UP * 0.18)
+        token_row_center = token_row.get_center()
+        token_row.set_z_index(2)
+        token_count = Tex(r"577\ \text{tokens}", font_size=30, color=YELLOW_B)
+        token_count.next_to(token_row, DOWN, buff=0.26)
+
+        self.play(
+            FadeOut(crop_with_grid, shift=RIGHT * 0.18),
+            FadeOut(patch_value_vector[1], shift=DOWN * 0.05),
+            patch_value_vector[0].animate.scale(0.06).move_to(token_seed).set_opacity(0),
+            FadeIn(token_seed, scale=0.82),
+            run_time=0.85,
+        )
+        self.remove(patch_value_vector[0])
+        self.wait(0.2)
+
+        seed_landing_index = 3
+        self.play(
+            ReplacementTransform(token_seed, token_cells[seed_landing_index]),
+            LaggedStart(*[
+                TransformFromCopy(token_seed.copy(), cell)
+                for index, cell in enumerate(token_cells)
+                if index != seed_landing_index
+            ], lag_ratio=0.025),
+            FadeIn(token_ellipsis, shift=UP * 0.04),
+            run_time=1.25,
+        )
+        self.play(
+            FadeIn(token_count, shift=UP * 0.06),
+            run_time=0.45,
+        )
+        self.wait(0.55)
+
+        attention_caption = TexText(
+            "multi-head self-attention",
+            font_size=25,
+            color=TEAL_B,
+        )
+        attention_caption.move_to(clip_frame.get_bottom() + UP * 0.34)
+
+        back_token_rows = self.make_token_row_stack(token_row, layers=3)
+        attention_connections = self.make_attention_connections(token_cells)
+        attended_palette = [
+            "#FF4D6D",
+            "#FFD166",
+            "#06D6A0",
+            "#4CC9F0",
+            "#B517FF",
+            "#FF9F1C",
+            "#7AE582",
+            "#F15BB5",
+        ]
+        attended_colors = [
+            attended_palette[index % len(attended_palette)]
+            for index in range(len(token_cells))
+        ]
+
+        self.play(
+            clip_frame.animate.set_stroke(TEAL_B, width=1.35, opacity=1.0),
+            FadeIn(attention_caption, shift=UP * 0.05),
+            run_time=0.55,
+        )
+        self.play(
+            LaggedStart(*[
+                FadeIn(row, shift=UP * 0.08)
+                for row in back_token_rows
+            ], lag_ratio=0.18),
+            run_time=0.85,
+        )
+        self.play(
+            LaggedStart(*[
+                ShowCreation(curve)
+                for curve in attention_connections
+            ], lag_ratio=0.018),
+            run_time=1.25,
+        )
+        token_color_anims = [
+                cell.animate.set_fill(attended_colors[index], opacity=0.96).set_stroke(
+                    WHITE,
+                    width=1.15,
+                    opacity=1.0,
+                )
+                for index, cell in enumerate(token_cells)
+        ]
+        stack_color_anims = []
+        stack_attention_palette = [
+            "#2EC4B6",
+            "#FF3366",
+            "#8338EC",
+            "#FBFF12",
+            "#3A86FF",
+            "#FF9F1C",
+            "#06FFA5",
+            "#F72585",
+        ]
+        for row_index, row in enumerate(back_token_rows):
+            row_opacity = 0.37 - 0.11 * row_index
+            visible_index = 0
+            for mob in row:
+                if isinstance(mob, Square):
+                    color_index = (visible_index * 7 + row_index * 4 + 2) % len(stack_attention_palette)
+                    stack_color_anims.append(
+                        mob.animate.set_fill(
+                            stack_attention_palette[color_index],
+                            opacity=row_opacity,
+                        ).set_stroke(
+                            WHITE,
+                            width=0.8,
+                            opacity=row_opacity,
+                        )
+                    )
+                    visible_index += 1
+
+        self.play(
+            *token_color_anims,
+            *stack_color_anims,
+            run_time=0.72,
+        )
+        self.wait(1.0)
+
+        # PART 5 -- LayerNorm stabilizes each token vector
+        layernorm_caption = TexText(
+            "LayerNorm",
+            font_size=25,
+            color=GREEN_B,
+        )
+        layernorm_caption.move_to(attention_caption)
+        layernorm_stats = self.make_layernorm_stats(token_cells)
+        layernorm_stats.set_z_index(4)
+        token_count_layernorm = token_count.copy()
+        token_count_layernorm.next_to(layernorm_stats, DOWN, buff=0.2)
+
+        layernorm_colors = [
+            interpolate_color(
+                attended_colors[index],
+                WHITE if index % 2 == 0 else BLACK,
+                0.34 if index % 2 == 0 else 0.28,
+            )
+            for index in range(len(token_cells))
+        ]
+
+        self.play(
+            Transform(attention_caption, layernorm_caption),
+            clip_frame.animate.set_stroke(GREEN_B, width=1.35, opacity=1.0),
+            FadeOut(back_token_rows, shift=UP * 0.08),
+            FadeOut(attention_connections),
+            Transform(token_count, token_count_layernorm),
+            run_time=0.85,
+        )
+        self.play(
+            FadeIn(layernorm_stats[0], shift=RIGHT * 0.05),
+            FadeIn(layernorm_stats[1], shift=RIGHT * 0.05),
+            LaggedStart(*[
+                FadeIn(number, shift=DOWN * 0.025)
+                for number in layernorm_stats[2]
+            ], lag_ratio=0.012),
+            LaggedStart(*[
+                FadeIn(number, shift=UP * 0.025)
+                for number in layernorm_stats[3]
+            ], lag_ratio=0.012),
+            run_time=1.0,
+        )
+        self.play(
+            *[
+                cell.animate.set_fill(layernorm_colors[index], opacity=1.0).set_stroke(
+                    WHITE,
+                    width=1.0,
+                    opacity=0.96,
+                )
+                for index, cell in enumerate(token_cells)
+            ],
+            run_time=0.85,
+        )
+        self.wait(1.0)
+
+        # PART 6 -- Feed-forward MLP transforms each token independently
+        mlp_caption = TexText(
+            "Feed-forward MLP",
+            font_size=25,
+            color=BLUE_B,
+        )
+        mlp_caption.move_to(attention_caption)
+
+        selected_index = len(token_cells) // 2
+        selected_token = token_cells[selected_index]
+        token_home = selected_token.get_center()
+        input_vector = self.make_mlp_vector(output=False)
+        input_vector.move_to(token_home + LEFT * 2.25 + DOWN * 1.35)
+        mlp = self.make_feed_forward_mlp()
+        mlp.next_to(input_vector, RIGHT, buff=0.78)
+        output_vector = self.make_mlp_vector(output=True)
+        output_vector.next_to(mlp, RIGHT, buff=0.76)
+        vector_to_mlp_arrow = self.arrow_between(input_vector, mlp, color=BLUE_B, buff=0.08)
+        mlp_to_vector_arrow = self.arrow_between(mlp, output_vector, color=YELLOW_B, buff=0.08)
+        output_token = self.make_token_cell(index=23, side=selected_token.get_width())
+        output_token.set_fill("#2DE2E6", opacity=1.0)
+        output_token.set_stroke(WHITE, width=1.15, opacity=1.0)
+        output_token.move_to(token_home)
+
+        final_palette = [
+            "#2DE2E6",
+            "#FF6B6B",
+            "#4D96FF",
+            "#FFD93D",
+            "#9B5DE5",
+            "#00C2A8",
+            "#FF8FAB",
+            "#80ED99",
+        ]
+        final_token_colors = [
+            final_palette[(index * 3 + 1) % len(final_palette)]
+            for index in range(len(token_cells))
+        ]
+        final_token_colors[selected_index] = "#2DE2E6"
+
+        self.play(
+            Transform(attention_caption, mlp_caption),
+            clip_frame.animate.set_stroke(BLUE_B, width=1.35, opacity=1.0),
+            FadeOut(layernorm_stats),
+            FadeOut(token_count),
+            selected_token.animate.move_to(input_vector.get_center()).scale(1.18),
+            run_time=0.85,
+        )
+        self.play(
+            ReplacementTransform(selected_token, input_vector),
+            run_time=0.55,
+        )
+        self.play(
+            FadeIn(mlp, shift=RIGHT * 0.12),
+            ShowCreation(vector_to_mlp_arrow),
+            run_time=0.75,
+        )
+        self.play(
+            mlp[1][1].animate.set_fill(BLUE_B, opacity=0.58).set_stroke(WHITE, width=1.45, opacity=0.96),
+            mlp[0].animate.set_stroke(BLUE_B, width=0.8, opacity=0.5),
+            run_time=0.5,
+        )
+        self.play(
+            ShowCreation(mlp_to_vector_arrow),
+            FadeIn(output_vector, shift=RIGHT * 0.12),
+            mlp[1][2].animate.set_fill(YELLOW_B, opacity=0.55).set_stroke(WHITE, width=1.45, opacity=0.96),
+            run_time=0.75,
+        )
+        self.play(
+            ReplacementTransform(output_vector, output_token),
+            FadeOut(input_vector, shift=LEFT * 0.08),
+            FadeOut(mlp),
+            FadeOut(vector_to_mlp_arrow),
+            FadeOut(mlp_to_vector_arrow),
+            run_time=0.95,
+        )
+        self.play(
+            *[
+                cell.animate.set_fill(final_token_colors[index], opacity=1.0).set_stroke(
+                    WHITE,
+                    width=1.05,
+                    opacity=0.98,
+                )
+                for index, cell in enumerate(token_cells)
+                if index != selected_index
+            ],
+            output_token.animate.set_fill(final_token_colors[selected_index], opacity=1.0).set_stroke(
+                WHITE,
+                width=1.05,
+                opacity=0.98,
+            ),
+            run_time=0.9,
+        )
+        self.wait(1.0)
+
+        # PART 7 -- Residual connection adds the original tokens back
+        residual_caption = TexText(
+            "Residual connection",
+            font_size=25,
+            color=YELLOW_B,
+        )
+        residual_caption.move_to(attention_caption)
+
+        residual_row, residual_cells, residual_ellipsis = self.make_transformer_token_row()
+        residual_row.move_to(token_row_center + DOWN * 0.72)
+        residual_row.set_opacity(0.78)
+
+        current_token_mobs = [
+            output_token if index == selected_index else token_cells[index]
+            for index in range(len(token_cells))
+        ]
+        residual_plus_marks = VGroup()
+        plus_indices = [2, 7, 12, 17, 22, 26]
+        for index in plus_indices:
+            plus = Tex(r"+", font_size=23, color=YELLOW_B)
+            plus.move_to((residual_cells[index].get_center() + current_token_mobs[index].get_center()) / 2)
+            residual_plus_marks.add(plus)
+
+        residual_result_palette = [
+            "#7EE8FA",
+            "#FFB86B",
+            "#8AFF80",
+            "#FF79C6",
+            "#A78BFA",
+            "#FDE047",
+            "#5EEAD4",
+            "#F87171",
+        ]
+        residual_result_colors = [
+            residual_result_palette[(index * 5 + 2) % len(residual_result_palette)]
+            for index in range(len(token_cells))
+        ]
+
+        self.play(
+            Transform(attention_caption, residual_caption),
+            clip_frame.animate.set_stroke(YELLOW_B, width=1.35, opacity=1.0),
+            FadeIn(residual_row, shift=UP * 0.08),
+            LaggedStart(*[
+                FadeIn(plus, scale=0.7)
+                for plus in residual_plus_marks
+            ], lag_ratio=0.08),
+            run_time=0.85,
+        )
+        self.play(
+            residual_row.animate.move_to(token_row_center).set_opacity(0.0),
+            FadeOut(residual_plus_marks, shift=UP * 0.08),
+            *[
+                mob.animate.set_fill(residual_result_colors[index], opacity=1.0).set_stroke(
+                    WHITE,
+                    width=1.08,
+                    opacity=0.98,
+                )
+                for index, mob in enumerate(current_token_mobs)
+            ],
+            run_time=1.1,
+        )
+        self.wait(0.85)
+
+        # PART 8 -- Collapse one ViT block into a repeated Transformer stack
+        vit_frame_copy = clip_frame.copy()
+        vit_frame_copy.set_fill(BLACK, opacity=0)
+        vit_frame_copy.set_stroke(BLUE_B, width=1.25, opacity=0.65)
+
+        transformer_stack = self.make_transformer_depth_stack()
+        transformer_stack.move_to(ORIGIN + DOWN * 0.08)
+        stack_source_layer = transformer_stack[0][0][0]
+        transformer_block = self.make_transformer_block(width=3.45, height=0.38, color=BLUE_B)
+        transformer_block.move_to(stack_source_layer)
+        stack_copy_layers = list(transformer_stack[0][0][1:]) + list(transformer_stack[0][2])
+        residual_token_state = Group(token_ellipsis, *current_token_mobs)
+        stack_caption = TexText(
+            "All 577 tokens flow through, attending to each other",
+            font_size=23,
+            color=YELLOW_B,
+        )
+        stack_caption.move_to(attention_caption)
+
+        self.play(
+            FadeIn(vit_frame_copy),
+            FadeOut(residual_token_state, shift=DOWN * 0.05),
+            Transform(attention_caption, stack_caption),
+            run_time=0.35,
+        )
+        self.play(
+            Transform(vit_frame_copy, transformer_block),
+            run_time=0.9,
+        )
+        stack_copy_source = vit_frame_copy.copy()
+        self.play(
+            ReplacementTransform(vit_frame_copy, stack_source_layer),
+            LaggedStart(*[
+                TransformFromCopy(stack_copy_source, layer)
+                for layer in stack_copy_layers
+            ], lag_ratio=0.055),
+            FadeIn(transformer_stack[0][1], shift=UP * 0.04),
+            run_time=1.35,
+        )
+        self.play(
+            FadeIn(transformer_stack[1], shift=LEFT * 0.08),
+            run_time=0.45,
+        )
+        self.wait(0.8)
+
+        token_frame = clip_frame.copy()
+        token_frame.set_fill(GREY_E, opacity=0.035)
+        token_frame.set_stroke(BLUE_B, width=1.15, opacity=0.9)
+
+        position_token_row, position_token_cells, position_ellipsis = self.make_transformer_token_row(
+            left_count=10,
+            right_count=4,
+            side=0.34,
+        )
+        position_token_row.move_to(token_row_center + DOWN * 0.02)
+        position_palette = [
+            "#F94144",
+            "#F3722C",
+            "#F9C74F",
+            "#90BE6D",
+            "#43AA8B",
+            "#577590",
+            "#9B5DE5",
+            "#00BBF9",
+        ]
+        for index, cell in enumerate(position_token_cells):
+            cell.set_fill(position_palette[index % len(position_palette)], opacity=1.0)
+            cell.set_stroke(WHITE, width=0.95, opacity=0.96)
+        position_token_cells[0].set_fill(YELLOW_B, opacity=1.0)
+        position_token_cells[0].set_stroke(WHITE, width=1.25, opacity=1.0)
+
+        position_labels = self.make_position_token_labels(position_token_cells)
+        cls_pos_label = position_labels[2][0]
+        cls_patch_label = position_labels[3][0]
+        non_cls_position_labels = VGroup(
+            position_labels[0],
+            position_labels[1],
+            cls_pos_label,
+            *position_labels[2][1:],
+            *position_labels[3][1:],
+        )
+        non_cls_tokens = VGroup(
+            position_ellipsis,
+            *position_token_cells[1:],
+        )
+        cls_token = position_token_cells[0]
+        cls_focus_group = VGroup(cls_token, cls_patch_label)
+        cls_vector = self.make_cls_embedding_vector()
+        cls_vector.move_to(ORIGIN + DOWN * 0.05)
+        projection_caption = Tex(
+            r"\text{linear projection }1024\text{-dim}\rightarrow768\text{-dim}",
+            font_size=25,
+            color=GREEN_B,
+        )
+        projection_caption.move_to(attention_caption)
+
+        tower_without_bottom = VGroup(
+            *transformer_stack[0][0][1:],
+            transformer_stack[0][1],
+            *transformer_stack[0][2],
+            transformer_stack[1],
+        )
+
+        self.play(
+            FadeOut(tower_without_bottom, shift=UP * 0.05),
+            Transform(stack_source_layer[0], token_frame),
+            FadeOut(stack_source_layer[1]),
+            FadeOut(attention_caption, shift=DOWN * 0.05),
+            run_time=0.9,
+        )
+        self.play(
+            FadeIn(position_token_row, shift=UP * 0.08),
+            FadeIn(position_labels[0], shift=RIGHT * 0.04),
+            FadeIn(position_labels[1], shift=RIGHT * 0.04),
+            LaggedStart(*[
+                FadeIn(label, shift=UP * 0.02)
+                for label in position_labels[2]
+            ], lag_ratio=0.01),
+            LaggedStart(*[
+                FadeIn(label, shift=DOWN * 0.02)
+                for label in position_labels[3]
+            ], lag_ratio=0.01),
+            run_time=1.1,
+        )
+        self.wait(0.65)
+        self.play(
+            FadeOut(non_cls_tokens, shift=DOWN * 0.06),
+            FadeOut(non_cls_position_labels),
+            run_time=0.8,
+        )
+        self.play(
+            cls_token.animate.scale(2.2).move_to(ORIGIN + DOWN * 0.05),
+            cls_patch_label.animate.next_to(ORIGIN + DOWN * 0.05, DOWN, buff=0.44),
+            FadeIn(projection_caption, shift=UP * 0.05),
+            run_time=0.8,
+        )
+        self.play(
+            ReplacementTransform(cls_focus_group, cls_vector),
+            run_time=0.9,
+        )
+        self.wait(0.75)
+
+        # PART 9 -- L2 normalize the final embedding onto the unit sphere
+        embedding_space = self.make_embedding_space()
+        embedding_shift = UP * 0.24
+        embedding_space.shift(embedding_shift)
+
+        raw_endpoint = np.array([1.58, 0.82, 0.55])
+        normalized_endpoint = raw_endpoint / np.linalg.norm(raw_endpoint)
+        raw_embedding_vector = self.make_embedding_vector(raw_endpoint, color=YELLOW_B)
+        raw_embedding_vector.shift(embedding_shift)
+        raw_vector_label = Tex(r"\mathbf{v}", font_size=27, color=YELLOW_B)
+        raw_vector_label.next_to(raw_embedding_vector[1], UR, buff=0.12)
+
+        normalized_embedding_vector = self.make_embedding_vector(normalized_endpoint, color=GREEN_B)
+        normalized_embedding_vector.shift(embedding_shift)
+        normalized_vector_label = Tex(r"\hat{\mathbf{v}}", font_size=27, color=GREEN_B)
+        normalized_vector_label.next_to(normalized_embedding_vector[1], UR, buff=0.12)
+
+        l2_caption = Tex(
+            r"\text{L2-normalize (rescale to unit length)}",
+            font_size=25,
+            color=GREEN_B,
+        )
+        l2_caption.move_to(projection_caption)
+
+        self.play(
+            FadeOut(stack_source_layer[0]),
+            FadeIn(embedding_space[0]),
+            FadeIn(embedding_space[2]),
+            FadeIn(embedding_space[3]),
+            FadeIn(embedding_space[4]),
+            Transform(projection_caption, l2_caption),
+            FadeOut(cls_vector, shift=DOWN * 0.05),
+            FadeIn(raw_embedding_vector, shift=UP * 0.05),
+            FadeIn(raw_vector_label, shift=UP * 0.04),
+            run_time=1.05,
+        )
+        self.play(
+            FadeIn(embedding_space[1]),
+            run_time=0.75,
+        )
+        self.wait(0.4)
+        self.play(
+            Transform(raw_embedding_vector, normalized_embedding_vector),
+            Transform(raw_vector_label, normalized_vector_label),
+            run_time=1.2,
+        )
+        self.wait(1.25)
