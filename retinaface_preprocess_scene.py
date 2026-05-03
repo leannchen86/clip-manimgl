@@ -42,6 +42,41 @@ class RetinaFacePreprocessScene(Scene):
             paths[name] = str(path)
         return paths
 
+    def make_patch_channel_files(self, source="mid.png", size=336, patch_size=14, row=12, col=12):
+        output_dir = Path(__file__).with_name(".generated") / "vit_patch"
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        source_path = Path(__file__).with_name(source)
+        image = Image.open(source_path).convert("RGB")
+        resample = getattr(Image, "Resampling", Image).BILINEAR
+        if source_path.name == "mid.png":
+            side = min(image.size)
+            left = (image.width - side) // 2
+            upper = (image.height - side) // 2
+            patch = image.crop((left, upper, left + side, upper + side))
+        else:
+            image = image.resize((size, size), resample)
+            left = col * patch_size
+            upper = row * patch_size
+            patch = image.crop((left, upper, left + patch_size, upper + patch_size))
+        r, g, b = patch.split()
+
+        paths = {}
+        patch_path = output_dir / "patch_rgb.png"
+        patch.save(patch_path)
+        paths["RGB"] = str(patch_path)
+
+        channel_specs = [
+            ("R", Image.merge("RGB", (r, Image.new("L", patch.size), Image.new("L", patch.size)))),
+            ("G", Image.merge("RGB", (Image.new("L", patch.size), g, Image.new("L", patch.size)))),
+            ("B", Image.merge("RGB", (Image.new("L", patch.size), Image.new("L", patch.size), b))),
+        ]
+        for name, channel_image in channel_specs:
+            path = output_dir / f"patch_{name}.png"
+            channel_image.save(path)
+            paths[name] = str(path)
+        return paths
+
     def mono(self, text, font_size=22, color=WHITE, **kwargs):
         return TexText(
             self.tex_escape(text),
@@ -245,6 +280,131 @@ class RetinaFacePreprocessScene(Scene):
             channels.add(Group(image, frame, grid, label))
         channels.arrange(RIGHT, buff=0.32)
         return channels
+
+    def make_patch_stack(self, patch_files, side=1.22):
+        stack = Group()
+        channel_specs = [
+            ("B", BLUE_B, RIGHT * 0.42 + UP * 0.32),
+            ("G", GREEN_B, RIGHT * 0.28 + UP * 0.21),
+            ("R", RED_B, RIGHT * 0.14 + UP * 0.10),
+        ]
+        for channel, color, offset in channel_specs:
+            channel_image = ImageMobject(patch_files[channel])
+            channel_image.set_height(side)
+            frame = Square(side_length=side)
+            frame.set_fill(BLACK, opacity=0.12)
+            frame.set_stroke(color, width=1.4, opacity=0.9)
+            frame.shift(offset)
+            channel_image.move_to(frame)
+            label = self.mono(channel, font_size=15, color=color)
+            label.move_to(frame.get_corner(UR) + LEFT * 0.15 + DOWN * 0.15)
+            stack.add(Group(channel_image, frame, label))
+
+        patch_image = ImageMobject(patch_files["RGB"])
+        patch_image.set_height(side)
+        patch_frame = Square(side_length=side)
+        patch_frame.set_fill(BLACK, opacity=0)
+        patch_frame.set_stroke(WHITE, width=1.9, opacity=0.95)
+        patch_image.move_to(patch_frame)
+
+        return Group(stack, Group(patch_image, patch_frame))
+
+    def make_patch_dimension_marks(self, patch_front, color=YELLOW_B):
+        frame = patch_front[1]
+        width_label = Tex(r"14", font_size=28, color=color)
+        width_label.next_to(frame, DOWN, buff=0.1)
+        height_label = Tex(r"14", font_size=28, color=color)
+        height_label.next_to(frame, LEFT, buff=0.12)
+        return VGroup(width_label, height_label)
+
+    def make_channel_depth_mark(self, channel_stack, color=WHITE):
+        corners = [
+            channel_stack[2][1].get_corner(UR),
+            channel_stack[1][1].get_corner(UR),
+            channel_stack[0][1].get_corner(UR),
+        ]
+        line = VMobject()
+        line.set_points_as_corners(corners)
+        line.set_stroke(color, width=1.6, opacity=0.95)
+
+        label = Tex(r"3", font_size=28, color=color)
+        label.next_to(line, RIGHT, buff=0.12)
+        label.shift(UP * 0.02)
+        return VGroup(line, label)
+
+    def make_patch_sweep_grid(self, square_mob, rows=24, cols=24, color=YELLOW_B):
+        cells = VGroup()
+        left = square_mob.get_left()[0]
+        right = square_mob.get_right()[0]
+        bottom = square_mob.get_bottom()[1]
+        top = square_mob.get_top()[1]
+        cell_w = (right - left) / cols
+        cell_h = (top - bottom) / rows
+
+        for i in range(rows):
+            for j in range(cols):
+                cell = Rectangle(width=cell_w, height=cell_h)
+                cell.move_to([
+                    left + (j + 0.5) * cell_w,
+                    top - (i + 0.5) * cell_h,
+                    0,
+                ])
+                cell.set_fill(color, opacity=0)
+                cell.set_stroke(color, width=0.45, opacity=0)
+                cells.add(cell)
+        return cells
+
+    def make_patch_pixel_grid(self, patch_front, rows=14, cols=14, color=YELLOW_B):
+        frame = patch_front[1]
+        cells = VGroup()
+        left = frame.get_left()[0]
+        right = frame.get_right()[0]
+        bottom = frame.get_bottom()[1]
+        top = frame.get_top()[1]
+        cell_w = (right - left) / cols
+        cell_h = (top - bottom) / rows
+
+        for i in range(rows):
+            for j in range(cols):
+                cell = Rectangle(width=cell_w, height=cell_h)
+                cell.move_to([
+                    left + (j + 0.5) * cell_w,
+                    top - (i + 0.5) * cell_h,
+                    0,
+                ])
+                cell.set_fill(YELLOW_B, opacity=0.05)
+                cell.set_stroke(color, width=0.55, opacity=0.7)
+                cells.add(cell)
+        return cells
+
+    def make_patch_value_vector(self):
+        visible_values = [
+            "0.12", "-0.48", "0.31", r"\ldots", "0.07",
+        ]
+        entries = Tex(
+            r"\left[" + r",\ ".join(visible_values) + r"\right]",
+            font_size=27,
+            color=WHITE,
+        )
+        label = Tex(r"\text{linear projection}\ \rightarrow\ 1024\ \text{dims}", font_size=20, color=GREY_A)
+        label.next_to(entries, DOWN, buff=0.18)
+        return VGroup(entries, label)
+
+    def make_patch_vector(self):
+        card = RoundedRectangle(
+            width=4.25,
+            height=1.35,
+            corner_radius=0.1,
+            stroke_color=WHITE,
+            stroke_width=1.4,
+            fill_color="#101217",
+            fill_opacity=0.94,
+        )
+        vector = Tex(r"[0.12,\ -0.48,\ \ldots,\ 0.07]", font_size=34, color=WHITE)
+        vector.move_to(card.get_center() + UP * 0.16)
+        label = Tex(r"1024\ \text{dims}", font_size=26, color=GREY_A)
+        label.move_to(card.get_center() + DOWN * 0.42)
+        return VGroup(card, vector, label)
 
     def make_photo_thumb(self, height=0.95):
         photo = ImageMobject("rf_example.png")
@@ -512,4 +672,142 @@ class RetinaFacePreprocessScene(Scene):
 
         self.wait(1.0)
 
+        # PART 3 -- CLIP ViT patchify
+        patch_files = self.make_patch_channel_files()
+        clip_color = BLUE_B
+
+        clip_frame = RoundedRectangle(
+            width=11.7,
+            height=6.15,
+            corner_radius=0.14,
+            stroke_color=clip_color,
+            stroke_width=1.2,
+            fill_color=GREY_E,
+            fill_opacity=0.035,
+        )
+        clip_frame.move_to(DOWN * 0.04)
+        clip_title = Tex(r"\text{CLIP ViT-L/14 @ 336px}", font_size=36, color=WHITE)
+        clip_title.move_to(clip_frame.get_top() + DOWN * 0.27)
+        clip_subtitle = Tex(r"\text{(frozen, }\sim\text{ 300M params)}", font_size=22, color=GREY_A)
+        clip_subtitle.next_to(clip_frame, DOWN, buff=0.12)
+
+        cell_side = crop[1].get_width() / 7
+        selected_patch = Square(side_length=cell_side)
+        selected_patch.set_fill(YELLOW_B, opacity=0.16)
+        selected_patch.set_stroke(YELLOW_B, width=2.1, opacity=1.0)
+        selected_patch.move_to(crop[1].get_center())
+
+        patch_stack = self.make_patch_stack(patch_files, side=1.22)
+        patch_stack.move_to(LEFT * 2.45 + DOWN * 0.06)
+        patch_dims = self.make_patch_dimension_marks(patch_stack[1], color=YELLOW_B)
+        channel_depth_mark = self.make_channel_depth_mark(patch_stack[0], color=YELLOW_B)
+
+        patch_counter_label = Tex(r"\text{patch number:}", font_size=24, color=WHITE)
+        counter_digit_templates = {
+            char: Tex(char, font_size=34, color=YELLOW_B)
+            for char in "0123456789"
+        }
+        patch_counter_number = VGroup()
+
+        def set_patch_counter_number(value):
+            chars = str(int(value))
+            patch_counter_number.set_submobjects([
+                counter_digit_templates[char].copy()
+                for char in chars
+            ])
+            patch_counter_number.arrange(RIGHT, buff=0.015)
+
+        set_patch_counter_number(0)
+        patch_counter = VGroup(patch_counter_label, patch_counter_number)
+        patch_counter.arrange(RIGHT, buff=0.16)
+        patch_counter.next_to(patch_stack, DOWN, buff=0.46)
+
+        cls_token = Tex(r"+\ \texttt{[CLS] token}", font_size=27, color=YELLOW_B)
+        cls_token.next_to(patch_counter, DOWN, buff=0.18)
+
+        patch_pixel_grid = self.make_patch_pixel_grid(patch_stack[1], rows=14, cols=14, color=YELLOW_B)
+        patch_value_vector = self.make_patch_value_vector()
+        patch_value_vector.move_to(LEFT * 2.45 + DOWN * 0.02)
+
+        self.play(
+            FadeIn(clip_frame),
+            FadeIn(clip_title, shift=UP * 0.06),
+            FadeIn(clip_subtitle, shift=UP * 0.04),
+            ShowCreation(selected_patch),
+            run_time=0.9,
+        )
+        self.play(
+            FadeOut(Group(title_2, preprocess_frame, phase_label, resize_caption, rgb_row, tensor_label)),
+            crop_with_grid.animate.move_to(RIGHT * 2.45 + DOWN * 0.06),
+            ReplacementTransform(selected_patch, patch_stack[1][1]),
+            FadeIn(patch_stack[1][0]),
+            FadeIn(patch_stack[0], shift=RIGHT * 0.18 + UP * 0.12),
+            run_time=1.05,
+        )
+        patch_sweep_grid = self.make_patch_sweep_grid(crop[1], rows=24, cols=24, color=YELLOW_B)
+
+        def light_patch_cells(cells, alpha):
+            total = len(cells)
+            lit_count = min(total, int(np.floor(alpha * total)))
+            for index, cell in enumerate(cells):
+                if index < lit_count:
+                    opacity = 0.48 if index == lit_count - 1 else 0.16
+                    stroke_opacity = 0.75 if index == lit_count - 1 else 0.18
+                else:
+                    opacity = 0
+                    stroke_opacity = 0
+                cell.set_fill(YELLOW_B, opacity=opacity)
+                cell.set_stroke(YELLOW_B, width=0.45, opacity=stroke_opacity)
+
+        def update_patch_counter(counter, alpha):
+            set_patch_counter_number(round(alpha * 576))
+            counter.arrange(RIGHT, buff=0.16)
+            counter.next_to(patch_stack, DOWN, buff=0.46)
+
+        def add_cls_counter(counter, alpha):
+            set_patch_counter_number(576 + int(round(alpha)))
+            counter.arrange(RIGHT, buff=0.16)
+            counter.next_to(patch_stack, DOWN, buff=0.46)
+
+        self.play(
+            FadeIn(patch_dims),
+            ShowCreation(channel_depth_mark[0]),
+            FadeIn(channel_depth_mark[1], shift=RIGHT * 0.06),
+            run_time=0.75,
+        )
+        self.wait(0.45)
+        self.play(
+            FadeOut(VGroup(patch_dims, channel_depth_mark)),
+            FadeOut(resize_grid),
+            run_time=0.45,
+        )
+        self.play(
+            FadeIn(patch_counter, shift=UP * 0.06),
+            run_time=0.35,
+        )
+        self.play(
+            UpdateFromAlphaFunc(patch_sweep_grid, light_patch_cells),
+            UpdateFromAlphaFunc(patch_counter, update_patch_counter),
+            run_time=2.25,
+        )
+        cls_token.next_to(patch_counter, DOWN, buff=0.18)
+        self.play(
+            FadeIn(cls_token, shift=UP * 0.05),
+            UpdateFromAlphaFunc(patch_counter, add_cls_counter),
+            run_time=0.7,
+        )
+        self.wait(0.55)
+        self.play(
+            FadeOut(VGroup(patch_counter, cls_token, patch_sweep_grid)),
+            ShowCreation(patch_pixel_grid, lag_ratio=0.01),
+            FadeOut(patch_stack[0], shift=LEFT * 0.05),
+            FadeOut(patch_stack[1][0]),
+            run_time=0.9,
+        )
+        self.play(
+            FadeOut(patch_stack[1][1], shift=LEFT * 0.12),
+            ReplacementTransform(patch_pixel_grid, patch_value_vector[0]),
+            FadeIn(patch_value_vector[1], shift=UP * 0.05),
+            run_time=1.45,
+        )
         self.wait(1.4)
