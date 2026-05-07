@@ -19,7 +19,7 @@ class RetinaFacePreprocessScene(Scene):
         }
         return "".join(replacements.get(char, char) for char in str(text))
 
-    def make_rgb_channel_files(self, source="croped.png", size=336):
+    def make_rgb_channel_files(self, source="croped1.png", size=336):
         output_dir = Path(__file__).with_name(".generated") / "rgb_channels"
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -42,14 +42,14 @@ class RetinaFacePreprocessScene(Scene):
             paths[name] = str(path)
         return paths
 
-    def make_patch_channel_files(self, source="mid.png", size=336, patch_size=14, row=12, col=12):
+    def make_patch_channel_files(self, source="mid1.png", size=336, patch_size=14, row=12, col=12):
         output_dir = Path(__file__).with_name(".generated") / "vit_patch"
         output_dir.mkdir(parents=True, exist_ok=True)
 
         source_path = Path(__file__).with_name(source)
         image = Image.open(source_path).convert("RGB")
         resample = getattr(Image, "Resampling", Image).BILINEAR
-        if source_path.name == "mid.png":
+        if source_path.name == "mid1.png":
             side = min(image.size)
             left = (image.width - side) // 2
             upper = (image.height - side) // 2
@@ -180,7 +180,7 @@ class RetinaFacePreprocessScene(Scene):
         )
 
     def make_face_crop(self, side=1.95, show_text=True):
-        crop_image = ImageMobject("croped.png")
+        crop_image = ImageMobject("croped1.png")
         crop_image.set_height(side)
         if crop_image.get_width() > side:
             crop_image.set_width(side)
@@ -698,7 +698,7 @@ class RetinaFacePreprocessScene(Scene):
         return VGroup(card, vector, label)
 
     def make_photo_thumb(self, height=0.95):
-        photo = ImageMobject("rf_example.png")
+        photo = ImageMobject("rf_example1.png")
         photo.set_height(height)
         frame = SurroundingRectangle(photo, buff=0.02)
         frame.set_stroke(WHITE, width=1.0, opacity=0.75)
@@ -710,7 +710,7 @@ class RetinaFacePreprocessScene(Scene):
         self.camera.background_color = BLACK
 
         # PART 1 -- RetinaFace: detect & crop
-        photo = ImageMobject("rf_example.png")
+        photo = ImageMobject("rf_example1.png")
         photo.set_height(3.9)
         photo.move_to(UP * 0.2)
         photo_frame = SurroundingRectangle(photo, buff=0.04)
@@ -755,38 +755,6 @@ class RetinaFacePreprocessScene(Scene):
         square_bbox.set_stroke(crop_color, width=3.2)
         square_bbox.move_to(expanded_bbox)
 
-        left_bbox = Rectangle(
-            width=photo.get_width() * 0.15,
-            height=photo.get_height() * 0.24,
-            stroke_color=GREY_B,
-            stroke_width=2.0,
-        )
-        left_bbox.set_stroke(opacity=0.82)
-        left_bbox.move_to(
-            photo.get_center()
-            + LEFT * photo.get_width() * 0.405
-            + UP * photo.get_height() * 0.075
-        )
-        left_tag = self.technical_tag(["face", "score: 0.61"], font_size=12, width=1.18)
-        left_tag.next_to(left_bbox, UP, buff=0.06)
-
-        right_bbox = Rectangle(
-            width=photo.get_width() * 0.15,
-            height=photo.get_height() * 0.24,
-            stroke_color=GREY_B,
-            stroke_width=2.0,
-        )
-        right_bbox.set_stroke(opacity=0.82)
-        right_bbox.move_to(
-            photo.get_center()
-            + RIGHT * photo.get_width() * 0.295
-            + UP * photo.get_height() * 0.085
-        )
-        right_tag = self.technical_tag(["face", "score: 0.74"], font_size=12, width=1.05)
-        right_tag.next_to(right_bbox, UP, buff=0.06)
-
-        low_score_detections = VGroup(left_bbox, left_tag, right_bbox, right_tag)
-
         step_1 = TexText("detect highest-confidence face", font_size=23, color=detect_color)
         step_2 = TexText(r"expand bbox by \(+50\%\) margin", font_size=23, color=expand_color)
         step_3 = TexText("square-crop", font_size=23, color=crop_color)
@@ -817,7 +785,6 @@ class RetinaFacePreprocessScene(Scene):
             retinaface_tag,
             bbox,
             bbox_tag,
-            low_score_detections,
             step_1,
             step_2,
             step_3,
@@ -841,10 +808,6 @@ class RetinaFacePreprocessScene(Scene):
             run_time=0.45,
         )
         self.play(
-            ShowCreation(low_score_detections[0]),
-            FadeIn(low_score_detections[1], shift=UP * 0.05),
-            ShowCreation(low_score_detections[2]),
-            FadeIn(low_score_detections[3], shift=UP * 0.05),
             ShowCreation(bbox),
             FadeIn(bbox_tag, shift=RIGHT * 0.08),
             run_time=0.95,
@@ -900,7 +863,7 @@ class RetinaFacePreprocessScene(Scene):
 
         self.play(
             FadeOut(Group(photo, photo_frame, input_label)),
-            FadeOut(VGroup(retinaface_frame, retinaface_tag, bbox, low_score_detections, crop_label, crop_detail, failure)),
+            FadeOut(VGroup(retinaface_frame, retinaface_tag, bbox, crop_label, crop_detail, failure)),
             crop.animate.scale(preprocess_side / crop_final_side).move_to(preprocess_center),
             FadeIn(title_2, shift=UP * 0.08),
             run_time=1.15,
@@ -1627,6 +1590,47 @@ class RetinaFacePreprocessScene(Scene):
         self.play(
             Transform(raw_embedding_vector, normalized_embedding_vector),
             Transform(raw_vector_label, normalized_vector_label),
+            run_time=1.2,
+        )
+        self.wait(0.9)
+
+        # PART 10 -- Hand the normalized embedding to the trained MLP head
+        mlp_head_frame = RoundedRectangle(
+            width=clip_frame.get_width(),
+            height=clip_frame.get_height(),
+            corner_radius=0.14,
+            stroke_color=GREEN_B,
+            stroke_width=1.25,
+            fill_color=GREY_E,
+            fill_opacity=0.035,
+        )
+        mlp_head_frame.move_to(clip_frame)
+        mlp_head_title = Tex(r"\text{Trained MLP head}", font_size=36, color=WHITE)
+        mlp_head_title.move_to(mlp_head_frame.get_top() + DOWN * 0.27)
+        mlp_head_subtitle = Tex(
+            r"\text{248K params, the only thing that learned face}\rightarrow\text{name}",
+            font_size=22,
+            color=GREY_A,
+        )
+        mlp_head_subtitle.next_to(mlp_head_frame, DOWN, buff=0.12)
+
+        final_embedding_vector = self.make_cls_embedding_vector()
+        final_embedding_vector.move_to(ORIGIN + DOWN * 0.02)
+        exiting_vit = VGroup(clip_frame, clip_title, clip_subtitle)
+        embedding_world = Group(
+            embedding_space,
+            raw_embedding_vector,
+            raw_vector_label,
+        )
+
+        self.play(
+            exiting_vit.animate.scale(2.7, about_point=clip_frame.get_center()).set_opacity(0),
+            FadeOut(embedding_world, shift=DOWN * 0.08),
+            FadeOut(projection_caption, shift=DOWN * 0.05),
+            FadeIn(final_embedding_vector, shift=UP * 0.08),
+            FadeIn(mlp_head_frame),
+            FadeIn(mlp_head_title, shift=UP * 0.06),
+            FadeIn(mlp_head_subtitle, shift=UP * 0.04),
             run_time=1.2,
         )
         self.wait(1.25)
